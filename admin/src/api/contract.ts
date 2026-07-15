@@ -25,9 +25,9 @@ export interface ContractItem {
   remark?: string | null
   createTime: string
   updateTime: string
-  /** 实际到账金额（已完成收款汇总） */
+  /** 已完成实付金额汇总（含收付两个方向） */
   receivedAmount?: number
-  /** 剩余履约金额 = 合同总金额 - 实际到账金额 */
+  /** 待执行金额 = 合同总金额 - 所有实际已支付金额 */
   remainingPerformanceAmount?: number
 }
 

@@ -37,7 +37,7 @@ export class ContractService extends BaseService {
         where,
         include: {
           payments: {
-            where: { direction: '收款', status: '已完成' },
+            where: { status: '已完成' },
             select: { actualAmount: true, planAmount: true },
           },
         },
@@ -49,14 +49,14 @@ export class ContractService extends BaseService {
     ]);
 
     const list = rawList.map(({ payments, ...contract }) => {
-      const receivedAmount = payments.reduce(
+      const paidAmount = payments.reduce(
         (sum, p) => sum + Number(p.actualAmount ?? 0),
         0,
       );
       return {
         ...contract,
-        receivedAmount,
-        remainingPerformanceAmount: Math.max(Number(contract.amount) - receivedAmount, 0),
+        receivedAmount: paidAmount,
+        remainingPerformanceAmount: Math.max(Number(contract.amount) - paidAmount, 0),
       };
     });
 

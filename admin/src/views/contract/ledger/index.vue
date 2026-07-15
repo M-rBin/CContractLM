@@ -49,7 +49,7 @@
               <span style="white-space: nowrap">{{ formatAmount(row.amount) }} {{ row.currency }}</span>
             </template>
           </ElTableColumn>
-          <ElTableColumn label="剩余履约金额" width="160" align="right">
+          <ElTableColumn label="待执行金额" width="160" align="right">
             <template #default="{ row }">
               <span style="white-space: nowrap">{{ formatAmount(row.remainingPerformanceAmount ?? row.amount) }} {{ row.currency }}</span>
             </template>
