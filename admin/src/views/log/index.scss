@@ -1,0 +1,119 @@
+.oper-log-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+
+  .filter-card,
+  .table-card {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 12px;
+  }
+
+  .filter-card {
+    flex-shrink: 0;
+
+    :deep(.el-card__body) {
+      padding: 12px 20px;
+    }
+
+    .filter-form {
+      @include responsiveFilterForm();
+    }
+
+    .filter-number {
+      width: 180px;
+    }
+  }
+
+  .table-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    :deep(.el-card__body) {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 16px;
+    }
+  }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  .panel-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--art-text-gray-900);
+    line-height: 24px;
+  }
+
+  .panel-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--art-text-gray-500);
+    line-height: 20px;
+  }
+
+  .table-container {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .pagination-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    flex-shrink: 0;
+  }
+
+  .params-block {
+    margin-top: 16px;
+
+    .params-title {
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--art-text-gray-900);
+    }
+
+    pre {
+      min-height: 180px;
+      max-height: 420px;
+      padding: 12px;
+      overflow: auto;
+      border: 1px solid var(--el-border-color-light);
+      border-radius: 8px;
+      background: var(--el-fill-color-light);
+      color: var(--art-text-gray-800);
+      font-size: 13px;
+      line-height: 20px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .oper-log-page {
+    .table-header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .filter-number {
+      width: 100%;
+    }
+  }
+}
