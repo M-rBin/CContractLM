@@ -22,10 +22,16 @@ export interface AiCallConfig {
   baseUrl?: string;
 }
 
+/** 对话消息内容块（视觉消息用） */
+export type AiContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 /** 对话消息 */
 export interface AiMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  /** 纯文本消息直接传字符串；视觉消息传 AiContentPart 数组 */
+  content: string | AiContentPart[];
 }
 
 /** chat 调用可选参数 */

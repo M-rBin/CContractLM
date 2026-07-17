@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AiConfigService } from './ai-config.service';
-import { PdfExtractService } from './pdf-extract.service';
+import { PdfExtractService, MIN_TEXT_LENGTH } from './pdf-extract.service';
 import { matchContractType, matchCurrency } from '../agent/enum-matcher';
 import { RecognizeResultVo } from '../vo/recognize.vo';
 
@@ -11,7 +11,7 @@ const MAX_TEXT_LENGTH = 12000;
 /**
  * 合同智能识别服务
  *
- * 编排：PDF 文本提取 → 组装提示词 → 调用大模型 → 解析 JSON →
+ * 编排：PDF 文本提取 → 判断类型 → 文本路径或视觉路径 → 解析 JSON →
  * 枚举归一化 → 输出结构化识别结果（不落盘、不持久化）。
  */
 @Injectable()
@@ -25,7 +25,7 @@ export class ContractRecognizeService {
   ) {}
 
   /**
-   * 识别合同 PDF
+   * 识别合同 PDF（自动检测文本型/图片型，分别走文本或视觉路径）
    * @param buffer PDF 内存缓冲
    * @returns 结构化识别结果
    */
@@ -36,20 +36,35 @@ export class ContractRecognizeService {
       throw new BadRequestException('请先在系统设置中配置并启用 AI 服务');
     }
 
-    // 2. 提取文本（扫描件/空白件在此抛出）
+    // 2. 提取文本，判断是文本型还是图片型 PDF
     let text = await this.pdf.extractText(buffer);
-    if (text.length > MAX_TEXT_LENGTH) {
-      text = text.slice(0, MAX_TEXT_LENGTH);
+    let raw: string;
+
+    if (text.length >= MIN_TEXT_LENGTH) {
+      // 文本型 PDF：截断后送入文本路径
+      if (text.length > MAX_TEXT_LENGTH) {
+        text = text.slice(0, MAX_TEXT_LENGTH);
+      }
+      raw = await this.ai.recognize(config, this.buildSystemPrompt(), text, {
+        temperature: 0,
+        maxTokens: 2048,
+      });
+    } else {
+      // 图片型 PDF（扫描件）：渲染页面，走视觉路径
+      this.logger.debug('文本提取内容不足，切换至视觉识别路径');
+      const imageUrls = await this.pdf.renderPagesAsImages(buffer);
+      if (!imageUrls.length) {
+        throw new BadRequestException('无法从该 PDF 提取内容，请确认文件格式或手动录入');
+      }
+      raw = await this.ai.recognizeWithImages(config, this.buildSystemPrompt(), imageUrls, {
+        temperature: 0,
+        maxTokens: 2048,
+      });
     }
 
-    // 3. 调用大模型
-    const raw = await this.ai.recognize(config, this.buildSystemPrompt(), text, {
-      temperature: 0,
-      maxTokens: 2048,
-    });
     this.logger.debug(`AI 原始返回（前 500 字符）：${raw.slice(0, 500)}`);
 
-    // 4. 解析并归一化
+    // 3. 解析并归一化
     const result = this.parseResult(raw);
     if (result.confidence === 0) {
       // 只记录字段摘要（哪些字段有值），不记录原始合同内容，避免业务数据进入日志系统

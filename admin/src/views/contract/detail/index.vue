@@ -22,31 +22,6 @@
 
     <ElCard shadow="never" class="content-card">
       <ElTabs v-model="activeTab">
-        <ElTabPane label="附件归档" name="attachments">
-          <div class="toolbar">
-            <ElSelect v-model="attachmentCategory" placeholder="附件分类" class="toolbar-select">
-              <ElOption v-for="item in CONTRACT_ATTACHMENT_CATEGORIES" :key="item" :label="item" :value="item" />
-            </ElSelect>
-            <ElUpload :show-file-list="false" :http-request="uploadFile">
-              <ElButton type="primary" :icon="Upload">上传附件</ElButton>
-            </ElUpload>
-          </div>
-          <ElTable :data="detail?.attachments || []">
-            <ElTableColumn prop="category" label="分类" width="120" />
-            <ElTableColumn prop="fileName" label="文件名称" min-width="220" show-overflow-tooltip />
-            <ElTableColumn label="文件大小" width="120">
-              <template #default="{ row }">{{ fileSizeText(row.fileSize) }}</template>
-            </ElTableColumn>
-            <ElTableColumn prop="createTime" label="上传时间" width="170" />
-            <ElTableColumn label="操作" width="150" align="center">
-              <template #default="{ row }">
-                <ElButton link type="primary" @click="downloadFile(row)">下载</ElButton>
-                <ElButton link type="danger" @click="removeAttachment(row)">删除</ElButton>
-              </template>
-            </ElTableColumn>
-          </ElTable>
-        </ElTabPane>
-
         <ElTabPane label="履约节点" name="milestones">
           <div class="toolbar">
             <ElButton type="primary" :icon="Plus" @click="openMilestone()">新增节点</ElButton>
@@ -109,6 +84,31 @@
             <ElTableColumn prop="operTarget" label="操作对象" min-width="160" />
             <ElTableColumn prop="operatorName" label="操作人" width="120" />
             <ElTableColumn prop="createTime" label="操作时间" width="170" />
+          </ElTable>
+        </ElTabPane>
+
+        <ElTabPane label="附件归档" name="attachments">
+          <div class="toolbar">
+            <ElSelect v-model="attachmentCategory" placeholder="附件分类" class="toolbar-select">
+              <ElOption v-for="item in CONTRACT_ATTACHMENT_CATEGORIES" :key="item" :label="item" :value="item" />
+            </ElSelect>
+            <ElUpload :show-file-list="false" :http-request="uploadFile">
+              <ElButton type="primary" :icon="Upload">上传附件</ElButton>
+            </ElUpload>
+          </div>
+          <ElTable :data="detail?.attachments || []">
+            <ElTableColumn prop="category" label="分类" width="120" />
+            <ElTableColumn prop="fileName" label="文件名称" min-width="220" show-overflow-tooltip />
+            <ElTableColumn label="文件大小" width="120">
+              <template #default="{ row }">{{ fileSizeText(row.fileSize) }}</template>
+            </ElTableColumn>
+            <ElTableColumn prop="createTime" label="上传时间" width="170" />
+            <ElTableColumn label="操作" width="150" align="center">
+              <template #default="{ row }">
+                <ElButton link type="primary" @click="downloadFile(row)">下载</ElButton>
+                <ElButton link type="danger" @click="removeAttachment(row)">删除</ElButton>
+              </template>
+            </ElTableColumn>
           </ElTable>
         </ElTabPane>
       </ElTabs>
@@ -202,7 +202,7 @@
   const router = useRouter()
   const contractId = Number(route.query.id)
   const detail = ref<ContractDetailData>()
-  const activeTab = ref('attachments')
+  const activeTab = ref('milestones')
   const attachmentCategory = ref('合同正文')
   const milestoneDialog = ref(false)
   const completeDialog = ref(false)

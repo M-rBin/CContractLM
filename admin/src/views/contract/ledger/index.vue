@@ -148,6 +148,54 @@
         <ElFormItem label="备注">
           <ElInput v-model="form.remark" type="textarea" maxlength="500" :rows="3" placeholder="请输入备注" />
         </ElFormItem>
+
+        <!-- 收付款计划（新增时可选填，AI 带入时自动预填） -->
+        <template v-if="!form.id">
+          <ElDivider content-position="left" style="margin: 16px 0 12px">收付款计划</ElDivider>
+          <div class="payment-section">
+            <ElTable v-if="paymentPlans.length" :data="paymentPlans" size="small" style="margin-bottom:8px">
+              <ElTableColumn label="方向" width="110">
+                <template #default="{ row }">
+                  <ElSelect v-model="row.direction" placeholder="请选择" size="small">
+                    <ElOption v-for="d in CONTRACT_PAYMENT_DIRECTIONS" :key="d" :label="d" :value="d" />
+                  </ElSelect>
+                </template>
+              </ElTableColumn>
+              <ElTableColumn label="计划金额">
+                <template #default="{ row }">
+                  <ElInputNumber v-model="row.planAmount" :min="0" :precision="2" size="small" style="width:100%" />
+                </template>
+              </ElTableColumn>
+              <ElTableColumn label="计划日期" width="155">
+                <template #default="{ row }">
+                  <ElDatePicker v-model="row.planDate" value-format="YYYY-MM-DD" type="date" size="small" placeholder="请选择" style="width:100%" />
+                </template>
+              </ElTableColumn>
+              <ElTableColumn label="备注">
+                <template #default="{ row }">
+                  <ElInput v-model="row.remark" maxlength="100" size="small" placeholder="备注" />
+                </template>
+              </ElTableColumn>
+              <ElTableColumn width="56" align="center">
+                <template #default="{ $index }">
+                  <ElButton type="danger" link size="small" @click="paymentPlans.splice($index, 1)">删除</ElButton>
+                </template>
+              </ElTableColumn>
+            </ElTable>
+            <ElButton size="small" plain @click="addPlanRow">+ 添加收付款计划</ElButton>
+          </div>
+
+          <!-- 合同附件（AI 导入时自动带入原始 PDF） -->
+          <ElDivider content-position="left" style="margin: 16px 0 12px">合同附件</ElDivider>
+          <div class="attachment-section">
+            <div v-if="pendingAttachment" class="attachment-item">
+              <ElIcon style="color:var(--el-color-primary)"><Document /></ElIcon>
+              <span class="attachment-name">{{ pendingAttachment.name }}</span>
+              <ElButton type="danger" link size="small" @click="pendingAttachment = null">移除</ElButton>
+            </div>
+            <span v-else class="attachment-tip">无附件，保存后可在详情页上传</span>
+          </div>
+        </template>
       </ElForm>
       <template #footer>
         <ElButton @click="dialogVisible = false">取消</ElButton>
@@ -161,25 +209,30 @@
   import { computed, onMounted, reactive, ref } from 'vue'
   import { useRouter } from 'vue-router'
   import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-  import { Download, Plus, Search } from '@element-plus/icons-vue'
+  import { Document, Download, Plus, Search } from '@element-plus/icons-vue'
   import { saveAs } from 'file-saver'
   import {
     CONTRACT_CURRENCIES,
+    CONTRACT_PAYMENT_DIRECTIONS,
     CONTRACT_STATUS,
     CONTRACT_TYPES,
     addContract,
+    addContractPayment,
     deleteContract,
     exportContracts,
     getContractList,
     updateContract,
+    uploadContractAttachment,
     type ContractItem,
     type ContractQuery
   } from '@/api/contract'
   import { userApi, type AdminUser } from '@/api/user'
+  import { useAiImportStore } from '@/store/modules/ai-import'
 
   defineOptions({ name: 'ContractLedger' })
 
   const router = useRouter()
+  const aiImportStore = useAiImportStore()
   const loading = ref(false)
   const tableData = ref<ContractItem[]>([])
   const userOptions = ref<AdminUser[]>([])
@@ -208,6 +261,13 @@
     status: '草稿',
     remark: ''
   })
+
+  /** 收付款计划列表（仅新增时使用） */
+  interface PlanRow { direction: string; planAmount: number; planDate: string; remark: string }
+  const paymentPlans = ref<PlanRow[]>([])
+
+  /** 待上传的合同原始 PDF（来自 AI 识别流程） */
+  const pendingAttachment = ref<File | null>(null)
   const dialogTitle = computed(() => (form.id ? '编辑合同' : '新增合同'))
   const rules: FormRules = {
     code: [{ required: true, message: '请输入合同编号', trigger: 'blur' }],
@@ -286,6 +346,19 @@
       status: '草稿',
       remark: c.remark || ''
     })
+    // 预填收付款计划（与提交过滤条件保持一致：direction、金额、日期均需有效）
+    if (Array.isArray(data.paymentPlans)) {
+      paymentPlans.value = data.paymentPlans
+        .filter((p: any) => p.direction && p.planAmount > 0 && p.planDate)
+        .map((p: any) => ({
+          direction: p.direction as string,
+          planAmount: Number(p.planAmount),
+          planDate: p.planDate || '',
+          remark: p.remark || ''
+        }))
+    }
+    // 读取待上传的原始 PDF
+    pendingAttachment.value = aiImportStore.pendingFile
     aiPrefilled.value = true
     dialogVisible.value = true
     // 清除 state，避免刷新或返回时重复预填
@@ -323,7 +396,12 @@
 
   async function handleSubmit() {
     await formRef.value?.validate()
-    validateDateOrder()
+    try {
+      validateDateOrder()
+    } catch (e: any) {
+      ElMessage.error(e.message)
+      return
+    }
     submitLoading.value = true
     try {
       const payload = {
@@ -346,7 +424,34 @@
         await updateContract({ id: form.id, ...payload })
         ElMessage.success('保存成功')
       } else {
-        await addContract(payload)
+        const { data: newContract } = await addContract(payload)
+        const contractId = newContract.id
+
+    // 保存收付款计划（有 direction、金额 > 0、日期已填的行）
+        const validPlans = paymentPlans.value.filter(
+          (p) => p.direction && p.planAmount > 0 && p.planDate
+        )
+        await Promise.all(
+          validPlans.map((plan) =>
+            addContractPayment({
+              contractId,
+              direction: plan.direction,
+              planAmount: plan.planAmount,
+              planDate: plan.planDate,
+              remark: plan.remark || undefined
+            })
+          )
+        )
+
+        // 上传原始合同 PDF 作为附件
+        if (pendingAttachment.value) {
+          const fd = new FormData()
+          fd.append('file', pendingAttachment.value)
+          fd.append('contractId', String(contractId))
+          fd.append('category', '合同正文')
+          await uploadContractAttachment(fd)
+        }
+
         ElMessage.success('新增成功')
       }
       dialogVisible.value = false
@@ -395,6 +500,13 @@
       status: '草稿',
       remark: ''
     })
+    paymentPlans.value = []
+    pendingAttachment.value = null
+    aiImportStore.clear()
+  }
+
+  function addPlanRow() {
+    paymentPlans.value.push({ direction: '', planAmount: 0, planDate: '', remark: '' })
   }
 
   function dateText(value?: string) {
@@ -490,6 +602,34 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       column-gap: 16px;
+    }
+
+    .payment-section {
+      padding: 0 0 4px;
+    }
+
+    .attachment-section {
+      padding: 4px 0 8px;
+
+      .attachment-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+      }
+
+      .attachment-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text-color-primary);
+      }
+
+      .attachment-tip {
+        font-size: 12px;
+        color: var(--el-text-color-secondary);
+      }
     }
   }
 </style>

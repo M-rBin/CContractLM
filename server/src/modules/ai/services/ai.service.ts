@@ -6,6 +6,7 @@ import {
 import {
   AiCallConfig,
   AiChatOptions,
+  AiContentPart,
   AiMessage,
   AiProvider,
 } from '../ai.types';
@@ -69,6 +70,36 @@ export class AiService {
         { role: 'user', content: contractText },
       ],
       options,
+    );
+  }
+
+  /**
+   * 图片型合同识别：将多张页面图片连同系统提示送入视觉模型，返回 JSON 文本。
+   * @param config AI 配置（需使用支持视觉的模型，如 qwen-vl-plus/max）
+   * @param systemPrompt 抽取指令（与文本路径相同）
+   * @param imageDataUrls 各页 base64 data URL 数组（data:image/png;base64,...）
+   * @param options 调用参数，timeoutMs 默认 60s（视觉推理比文本慢）
+   */
+  async recognizeWithImages(
+    config: AiCallConfig,
+    systemPrompt: string,
+    imageDataUrls: string[],
+    options: AiChatOptions = {},
+  ): Promise<string> {
+    const content: AiContentPart[] = [
+      ...imageDataUrls.map((url) => ({
+        type: 'image_url' as const,
+        image_url: { url },
+      })),
+      { type: 'text', text: '请从以上合同图片中提取信息，按要求输出 JSON。' },
+    ];
+    return this.chat(
+      config,
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content },
+      ],
+      { timeoutMs: 60000, ...options },
     );
   }
 
@@ -158,9 +189,11 @@ export class AiService {
     const timeoutMs = options.timeoutMs ?? Number(process.env.AI_CALL_TIMEOUT_MS || 30000);
     const url = `${this.resolveBaseUrl(config)}/messages`;
     // Anthropic 将 system 独立传参，其余消息保留 user/assistant
+    // content 只取字符串部分（视觉数组不适用于 system，防止 [object Object] 误拼接）
     const systemPrompt = messages
       .filter((m) => m.role === 'system')
-      .map((m) => m.content)
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .filter(Boolean)
       .join('\n');
     const chatMessages = messages
       .filter((m) => m.role !== 'system')

@@ -65,16 +65,20 @@
   import { UploadFilled } from '@element-plus/icons-vue'
   import type { UploadFile } from 'element-plus'
   import { recognizeContract, type RecognizeResult } from '@/api/contract-ai'
+  import { useAiImportStore } from '@/store/modules/ai-import'
 
   defineOptions({ name: 'ContractAiImport' })
 
   const router = useRouter()
+  const aiImportStore = useAiImportStore()
   const MAX_SIZE = 20 * 1024 * 1024
 
   type Status = 'idle' | 'recognizing' | 'done' | 'error'
   const status = ref<Status>('idle')
   const result = ref<RecognizeResult | null>(null)
   const errorMsg = ref('')
+  /** 保留原始 File，填入登记表单时一并传过去作为附件 */
+  const sourceFile = ref<File | null>(null)
 
   const confidence = computed(() => result.value?.confidence ?? 0)
   const amountText = computed(() => {
@@ -100,6 +104,7 @@
     try {
       const { data } = await recognizeContract(formData)
       result.value = data
+      sourceFile.value = raw
       status.value = 'done'
     } catch (e: any) {
       errorMsg.value = e?.message || '识别失败，请重试或手动录入'
@@ -109,6 +114,8 @@
 
   function fillForm() {
     if (!result.value) return
+    // 把原始 PDF 存入 store，让 ledger 页建合同后自动上传为附件
+    aiImportStore.setPendingFile(sourceFile.value)
     // 通过 history.state 传递识别结果，合同台账新增流程读取后预填
     router.push({
       path: '/contract/ledger',
@@ -124,6 +131,7 @@
     status.value = 'idle'
     result.value = null
     errorMsg.value = ''
+    sourceFile.value = null
   }
 
   // 离开页面重置为初始态
