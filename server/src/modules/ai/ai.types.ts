@@ -20,6 +20,8 @@ export interface AiCallConfig {
   apiKey: string;
   /** 服务地址（openai-compatible 必填；其余可覆盖默认地址） */
   baseUrl?: string;
+  /** 模型类型：text=文本模型（默认）vision=视觉模型（直接走图片识别路径） */
+  modelType?: 'text' | 'vision';
 }
 
 /** 对话消息内容块（视觉消息用） */

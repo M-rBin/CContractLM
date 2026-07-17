@@ -21,6 +21,13 @@
             <template #default="{ row }">{{ providerLabel(row.provider) }}</template>
           </ElTableColumn>
           <ElTableColumn prop="model" label="模型" min-width="150" show-overflow-tooltip />
+          <ElTableColumn prop="modelType" label="模型类型" width="120" align="center">
+            <template #default="{ row }">
+              <ElTag :type="row.modelType === 'vision' ? 'warning' : 'info'" size="small">
+                {{ row.modelType === 'vision' ? '视觉模型' : '文本模型' }}
+              </ElTag>
+            </template>
+          </ElTableColumn>
           <ElTableColumn prop="apiKey" label="密钥" min-width="140" show-overflow-tooltip />
           <ElTableColumn prop="baseUrl" label="服务地址" min-width="180" show-overflow-tooltip>
             <template #default="{ row }">{{ row.baseUrl || '-' }}</template>
@@ -74,6 +81,17 @@
         <ElFormItem label="模型" prop="model">
           <ElInput v-model="form.model" placeholder="如 gpt-4o、claude-sonnet-4-6、qwen-long" maxlength="100" />
         </ElFormItem>
+        <ElFormItem label="模型类型" prop="modelType">
+          <ElSelect v-model="form.modelType" style="width: 100%">
+            <ElOption
+              v-for="t in AI_MODEL_TYPES"
+              :key="t.value"
+              :label="t.label"
+              :value="t.value"
+            />
+          </ElSelect>
+          <div class="form-hint">图片型PDF（扫描件）必须选择视觉模型，如 qwen-vl-plus / qwen-vl-max</div>
+        </ElFormItem>
         <ElFormItem label="服务地址" prop="baseUrl">
           <ElInput
             v-model="form.baseUrl"
@@ -113,6 +131,7 @@
   import type { FormInstance, FormRules } from 'element-plus'
   import {
     AI_PROVIDERS,
+    AI_MODEL_TYPES,
     addAiConfig,
     deleteAiConfig,
     getAiConfigList,
@@ -137,6 +156,7 @@
     name: '',
     provider: 'openai',
     model: '',
+    modelType: 'text',
     apiKey: '',
     baseUrl: '',
     isDefault: 0,
@@ -207,6 +227,7 @@
     form.name = row.name
     form.provider = row.provider
     form.model = row.model
+    form.modelType = row.modelType || 'text'
     form.apiKey = ''
     form.baseUrl = row.baseUrl || ''
     form.isDefault = row.isDefault
@@ -219,6 +240,7 @@
     form.name = ''
     form.provider = 'openai'
     form.model = ''
+    form.modelType = 'text'
     form.apiKey = ''
     form.baseUrl = ''
     form.isDefault = 0
@@ -231,6 +253,7 @@
       name: form.name,
       provider: form.provider,
       model: form.model,
+      modelType: form.modelType,
       baseUrl: form.baseUrl.trim(),
       isDefault: form.isDefault,
       isEnabled: form.isEnabled
@@ -377,6 +400,13 @@
 
     .default-tag {
       margin-left: 8px;
+    }
+
+    .form-hint {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      line-height: 1.4;
     }
 
     .table-container {

@@ -735,6 +735,8 @@ model AiConfig {
   apiKey     String   @db.VarChar(500)
   /// 服务地址（openai-compatible 时必填）
   baseUrl    String?  @db.VarChar(200)
+  /// 模型类型：text=文本模型 vision=视觉模型（图片型PDF时必须选择视觉模型）
+  modelType  String   @default("text") @db.VarChar(10)
   /// 是否默认配置：1=是 0=否
   isDefault  Int      @default(0)
   /// 是否启用：1=启用 0=停用

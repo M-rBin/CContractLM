@@ -58,6 +58,7 @@ export class AiConfigService {
           model: dto.model,
           apiKey: this.crypto.encrypt(dto.apiKey),
           baseUrl: dto.baseUrl?.trim() || null,
+          modelType: dto.modelType || 'text',
           isDefault: count === 0 ? 1 : isDefault,
           isEnabled,
         },
@@ -90,6 +91,7 @@ export class AiConfigService {
           // apiKey 留空则保留原密钥
           ...(dto.apiKey ? { apiKey: this.crypto.encrypt(dto.apiKey) } : {}),
           baseUrl: dto.baseUrl?.trim() || null,
+          modelType: dto.modelType || 'text',
           // 不允许把当前唯一的默认配置取消默认（保证始终有默认），
           // 但允许通过设置其他配置为默认来间接转移
           isDefault: existing.isDefault === 1 && isDefault === 0 ? 1 : isDefault,
@@ -151,6 +153,7 @@ export class AiConfigService {
         model: row.model,
         apiKey: this.crypto.decrypt(row.apiKey),
         baseUrl: row.baseUrl || undefined,
+        modelType: (row.modelType || 'text') as 'text' | 'vision',
       };
     } else {
       callConfig = {
@@ -182,7 +185,38 @@ export class AiConfigService {
       model: row.model,
       apiKey: this.crypto.decrypt(row.apiKey),
       baseUrl: row.baseUrl || undefined,
+      modelType: (row.modelType || 'text') as 'text' | 'vision',
     };
+  }
+
+  /**
+   * 取视觉模型配置（用于图片型PDF识别）。
+   * 优先取标记为默认的 vision 配置；若无默认则取 id 最小的启用视觉配置。
+   * @returns 视觉配置；无启用的视觉配置时返回 null
+   */
+  async getVisionCallConfig(): Promise<AiCallConfig | null> {
+    const vision = await this.prisma.aiConfig.findFirst({
+      where: { modelType: 'vision', isEnabled: 1 },
+      orderBy: [{ isDefault: 'desc' }, { id: 'asc' }],
+    });
+    if (!vision) return null;
+    return {
+      provider: vision.provider as AiProvider,
+      model: vision.model,
+      apiKey: this.crypto.decrypt(vision.apiKey),
+      baseUrl: vision.baseUrl || undefined,
+      modelType: 'vision',
+    };
+  }
+
+  /**
+   * 取视觉模型配置（用于合同识别图片型PDF）。
+   * 优先取已标记为 vision 且启用的配置；若无，则 fallback 到默认配置。
+   * @deprecated 请使用 getVisionCallConfig() + getActiveCallConfig() 分步调用
+   */
+  async getVisionOrDefaultCallConfig(): Promise<AiCallConfig | null> {
+    const vision = await this.getVisionCallConfig();
+    return vision ?? this.getActiveCallConfig();
   }
 
   /** 所有提供商都必须提供 API 调用地址（不同厂商/网关端点各异，显式指定更可靠） */
@@ -204,6 +238,7 @@ export class AiConfigService {
     model: string;
     apiKey: string;
     baseUrl: string | null;
+    modelType: string;
     isDefault: number;
     isEnabled: number;
     createTime: Date;
@@ -216,6 +251,7 @@ export class AiConfigService {
       model: row.model,
       apiKey: this.crypto.mask(this.crypto.decrypt(row.apiKey)),
       baseUrl: row.baseUrl,
+      modelType: row.modelType || 'text',
       isDefault: row.isDefault,
       isEnabled: row.isEnabled,
       createTime: row.createTime.toISOString(),

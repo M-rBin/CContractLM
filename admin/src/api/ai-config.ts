@@ -9,6 +9,12 @@ export const AI_PROVIDERS = [
   { label: 'OpenAI 兼容', value: 'openai-compatible' }
 ] as const
 
+/** 模型类型 */
+export const AI_MODEL_TYPES = [
+  { label: '文本模型', value: 'text' },
+  { label: '视觉模型（图片型PDF）', value: 'vision' }
+] as const
+
 /** AI 配置项 */
 export interface AiConfigItem {
   id: number
@@ -18,6 +24,7 @@ export interface AiConfigItem {
   /** 脱敏后的密钥 */
   apiKey: string
   baseUrl: string | null
+  modelType: string
   isDefault: number
   isEnabled: number
   createTime: string
@@ -31,6 +38,7 @@ export interface AddAiConfigParams {
   model: string
   apiKey: string
   baseUrl?: string
+  modelType?: string
   isDefault?: number
   isEnabled?: number
 }

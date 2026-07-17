@@ -3,8 +3,12 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PDFParse } = require('pdf-parse');
 
-/** 识别所需的最小有效文本长度（低于此视为扫描件/空白件） */
-export const MIN_TEXT_LENGTH = 20;
+/** 识别所需的最小有效文本长度（低于此视为扫描件/空白件）
+ *  图片型PDF过滤占位行后残留文本通常 < 10 字符；文本型合同正文一般远超 50 字符 */
+export const MIN_TEXT_LENGTH = 50;
+
+/** 页面占位标记模式（pdf-parse 对扫描件产生的无意义行，如 "-- 1 of 7 --"） */
+const PAGE_MARKER_PATTERN = /^--\s*\d+\s*of\s*\d+\s*--$/;
 
 /** 视觉渲染最大页数（合同关键信息一般在前几页） */
 const MAX_RENDER_PAGES = 8;
@@ -33,7 +37,15 @@ export class PdfExtractService {
     try {
       parser = new PDFParse({ data: buffer });
       const result = await parser.getText();
-      return (result?.text || '').trim();
+      const raw = (result?.text || '').trim();
+      // 过滤掉 pdf-parse 对扫描件产生的页面占位行（"-- N of M --"），再判断有效文本量
+      const meaningful = raw
+        .split('\n')
+        .filter((line) => !PAGE_MARKER_PATTERN.test(line.trim()))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      return meaningful;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e).slice(0, 200);
       this.logger.warn(`PDF 解析失败：${msg}`);

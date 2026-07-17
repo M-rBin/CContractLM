@@ -24,6 +24,9 @@ export class AiConfigVo {
   @ApiProperty({ description: '服务地址', nullable: true })
   baseUrl: string | null;
 
+  @ApiProperty({ description: '模型类型：text=文本模型 vision=视觉模型' })
+  modelType: string;
+
   @ApiProperty({ description: '是否默认：1=是 0=否' })
   isDefault: number;
 

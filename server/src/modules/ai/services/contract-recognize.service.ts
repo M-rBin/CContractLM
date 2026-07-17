@@ -30,9 +30,9 @@ export class ContractRecognizeService {
    * @returns 结构化识别结果
    */
   async recognize(buffer: Buffer): Promise<RecognizeResultVo> {
-    // 1. 取默认可用 AI 配置
-    const config = await this.aiConfig.getActiveCallConfig();
-    if (!config) {
+    // 1. 取默认配置（文本模型）
+    const textConfig = await this.aiConfig.getActiveCallConfig();
+    if (!textConfig) {
       throw new BadRequestException('请先在系统设置中配置并启用 AI 服务');
     }
 
@@ -41,22 +41,28 @@ export class ContractRecognizeService {
     let raw: string;
 
     if (text.length >= MIN_TEXT_LENGTH) {
-      // 文本型 PDF：截断后送入文本路径
+      // 文本型 PDF：截断后送入文本模型
       if (text.length > MAX_TEXT_LENGTH) {
         text = text.slice(0, MAX_TEXT_LENGTH);
       }
-      raw = await this.ai.recognize(config, this.buildSystemPrompt(), text, {
+      raw = await this.ai.recognize(textConfig, this.buildSystemPrompt(), text, {
         temperature: 0,
         maxTokens: 2048,
       });
     } else {
-      // 图片型 PDF（扫描件）：渲染页面，走视觉路径
-      this.logger.debug('文本提取内容不足，切换至视觉识别路径');
+      // 图片型 PDF：自动切换视觉模型
+      this.logger.debug('文本提取内容不足，自动切换至视觉识别路径');
+      const visionConfig = await this.aiConfig.getVisionCallConfig();
+      if (!visionConfig) {
+        throw new BadRequestException(
+          '该 PDF 为图片型（扫描件），需要视觉模型才能识别。请在 AI 配置中添加一个模型类型为「视觉模型」的配置（如 qwen-vl-plus）',
+        );
+      }
       const imageUrls = await this.pdf.renderPagesAsImages(buffer);
       if (!imageUrls.length) {
         throw new BadRequestException('无法从该 PDF 提取内容，请确认文件格式或手动录入');
       }
-      raw = await this.ai.recognizeWithImages(config, this.buildSystemPrompt(), imageUrls, {
+      raw = await this.ai.recognizeWithImages(visionConfig, this.buildSystemPrompt(), imageUrls, {
         temperature: 0,
         maxTokens: 2048,
       });

@@ -18,6 +18,9 @@ export const AI_PROVIDERS = [
   'openai-compatible',
 ] as const;
 
+/** 模型类型枚举 */
+export const AI_MODEL_TYPES = ['text', 'vision'] as const;
+
 /**
  * 新增 AI 配置入参
  */
@@ -46,6 +49,11 @@ export class AddAiConfigDto {
   @IsString()
   @MaxLength(200)
   baseUrl: string;
+
+  @ApiProperty({ description: '模型类型：text=文本模型 vision=视觉模型', enum: AI_MODEL_TYPES, required: false })
+  @IsOptional()
+  @IsIn(AI_MODEL_TYPES)
+  modelType?: string;
 
   @ApiProperty({ description: '是否默认：1=是 0=否', required: false })
   @IsOptional()
@@ -94,6 +102,11 @@ export class UpdateAiConfigDto {
   @IsString()
   @MaxLength(200)
   baseUrl?: string;
+
+  @ApiProperty({ description: '模型类型：text=文本模型 vision=视觉模型', enum: AI_MODEL_TYPES, required: false })
+  @IsOptional()
+  @IsIn(AI_MODEL_TYPES)
+  modelType?: string;
 
   @ApiProperty({ description: '是否默认：1=是 0=否', required: false })
   @IsOptional()
