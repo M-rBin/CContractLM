@@ -719,3 +719,102 @@ model RecycleData {
   @@index([tenantId])
   @@map("recycle_data")
 }
+
+// ==================== AI 能力模块 ====================
+
+/// AI 服务配置（多套配置管理，供合同智能识别与合同智能助手统一读取）
+model AiConfig {
+  id         Int      @id @default(autoincrement())
+  /// 配置名称（用于区分多套配置）
+  name       String   @db.VarChar(50)
+  /// 提供商：openai/anthropic/qwen/deepseek/openai-compatible
+  provider   String   @db.VarChar(30)
+  /// 模型名称，如 gpt-4o、claude-sonnet-4-6、qwen-long、deepseek-chat
+  model      String   @db.VarChar(100)
+  /// 访问密钥（AES 加密存储，读取时脱敏）
+  apiKey     String   @db.VarChar(500)
+  /// 服务地址（openai-compatible 时必填）
+  baseUrl    String?  @db.VarChar(200)
+  /// 是否默认配置：1=是 0=否
+  isDefault  Int      @default(0)
+  /// 是否启用：1=启用 0=停用
+  isEnabled  Int      @default(1)
+  /// 租户 ID
+  tenantId   Int?
+  /// 创建时间
+  createTime DateTime @default(now())
+  /// 更新时间
+  updateTime DateTime @updatedAt
+
+  @@index([isDefault])
+  @@index([isEnabled])
+  @@index([tenantId])
+  @@map("ai_config")
+}
+
+/// 合同智能助手会话
+model ContractAgentSession {
+  id         Int      @id @default(autoincrement())
+  /// 归属用户 ID
+  userId     Int
+  /// 会话标题（取首条问题摘要）
+  title      String   @db.VarChar(100)
+  /// 租户 ID
+  tenantId   Int?
+  /// 创建时间
+  createTime DateTime @default(now())
+  /// 更新时间
+  updateTime DateTime @updatedAt
+
+  messages ContractAgentMessage[]
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("contract_agent_session")
+}
+
+/// 合同智能助手消息
+model ContractAgentMessage {
+  id          Int      @id @default(autoincrement())
+  /// 所属会话 ID
+  sessionId   Int
+  /// 角色：user=用户 assistant=助手
+  role        String   @db.VarChar(20)
+  /// 内容类型：text/table/chart/recognize/navigate
+  contentType String   @db.VarChar(20)
+  /// 内容（按内容类型结构化存储）
+  content     Json
+  /// 创建时间
+  createTime  DateTime @default(now())
+
+  session ContractAgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("contract_agent_message")
+}
+
+/// 合同智能助手经营问答 SQL 审计
+model ContractAgentSqlAudit {
+  id          Int      @id @default(autoincrement())
+  /// 执行人用户 ID
+  userId      Int
+  /// 用户原始问题
+  question    String   @db.VarChar(500)
+  /// 生成的 SQL 语句
+  generatedSql String? @db.Text
+  /// 结果行数
+  rowCount    Int      @default(0)
+  /// 状态：success=成功 blocked=拦截 failed=执行失败
+  status      String   @db.VarChar(20)
+  /// 错误或拦截原因
+  errorMsg    String?  @db.VarChar(500)
+  /// 租户 ID
+  tenantId    Int?
+  /// 创建时间
+  createTime  DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@index([tenantId])
+  @@map("contract_agent_sql_audit")
+}

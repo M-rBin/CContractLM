@@ -1,6 +1,7 @@
 <template>
   <ElConfigProvider size="default" :locale="locales[language]" :z-index="3000">
     <RouterView></RouterView>
+    <ContractAgent v-if="isLogin" />
   </ElConfigProvider>
 </template>
 
@@ -12,9 +13,10 @@
 
   import { setThemeTransitionClass } from './utils/theme/animation'
   import { checkStorageCompatibility } from './utils/storage'
+  import ContractAgent from './components/business/contract-agent/index.vue'
 
   const userStore = useUserStore()
-  const { language } = storeToRefs(userStore)
+  const { language, isLogin } = storeToRefs(userStore)
 
   const locales = {
     zh: zh,

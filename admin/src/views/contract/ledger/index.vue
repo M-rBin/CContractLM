@@ -90,6 +90,14 @@
     </ElCard>
 
     <ElDialog v-model="dialogVisible" :title="dialogTitle" width="720px" @closed="resetForm">
+      <ElAlert
+        v-if="aiPrefilled"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="以下信息由 AI 识别自动填入，请核对后保存"
+        style="margin-bottom: 16px"
+      />
       <ElForm ref="formRef" :model="form" :rules="rules" label-width="100px">
         <div class="form-grid">
           <ElFormItem label="合同编号" prop="code">
@@ -181,6 +189,7 @@
 
   const dialogVisible = ref(false)
   const submitLoading = ref(false)
+  const aiPrefilled = ref(false)
   const formRef = ref<FormInstance>()
   const form = reactive({
     id: undefined as number | undefined,
@@ -254,6 +263,33 @@
 
   function handleAdd() {
     dialogVisible.value = true
+  }
+
+  /** 读取 AI 智能录入带入的识别结果并预填新增表单 */
+  function applyAiRecognizedData() {
+    const state = window.history.state
+    const data = state?.aiRecognizedData
+    if (!data?.contract) return
+    const c = data.contract
+    Object.assign(form, {
+      id: undefined,
+      code: '',
+      name: c.name || '',
+      type: c.type || '',
+      signSubject: c.signSubject || '',
+      counterparty: c.counterparty || '',
+      amount: c.amount ?? 0,
+      currency: c.currency || '人民币',
+      signDate: c.signDate || '',
+      effectiveDate: c.effectiveDate || '',
+      expireDate: c.expireDate || '',
+      status: '草稿',
+      remark: c.remark || ''
+    })
+    aiPrefilled.value = true
+    dialogVisible.value = true
+    // 清除 state，避免刷新或返回时重复预填
+    window.history.replaceState({ ...state, aiRecognizedData: undefined }, '')
   }
 
   function handleEdit(row: any) {
@@ -340,6 +376,7 @@
   }
 
   function resetForm() {
+    aiPrefilled.value = false
     formRef.value?.resetFields()
     Object.assign(form, {
       id: undefined,
@@ -388,6 +425,7 @@
   onMounted(() => {
     loadList()
     loadUsers()
+    applyAiRecognizedData()
   })
 </script>
 

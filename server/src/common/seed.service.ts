@@ -333,6 +333,17 @@ export class SeedService {
       orderNum: 2,
       parentId: systemDir.id,
     });
+
+    await this.ensureMenu({
+      name: 'AI 配置管理',
+      type: 1,
+      router: '/system/ai-config',
+      perms: 'ai:config:list',
+      viewPath: '/system/ai-config/index.vue',
+      icon: 'MagicStick',
+      orderNum: 3,
+      parentId: systemDir.id,
+    });
   }
 
   /** 同步合同管理菜单（用于已有数据库补齐新增业务菜单） */
@@ -418,6 +429,18 @@ export class SeedService {
       viewPath: '/contract/analysis/index.vue',
       icon: 'TrendCharts',
       orderNum: 5,
+      parentId: null,
+      updateExisting: true,
+    });
+
+    await this.ensureMenu({
+      name: '智能录入',
+      type: 1,
+      router: '/contract/ai-import',
+      perms: 'contract:ai:recognize',
+      viewPath: '/contract/ai-import/index.vue',
+      icon: 'MagicStick',
+      orderNum: 7,
       parentId: null,
       updateExisting: true,
     });
