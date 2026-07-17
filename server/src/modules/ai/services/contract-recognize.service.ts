@@ -47,41 +47,42 @@ export class ContractRecognizeService {
       temperature: 0,
       maxTokens: 2048,
     });
+    this.logger.debug(`AI 原始返回（前 500 字符）：${raw.slice(0, 500)}`);
 
     // 4. 解析并归一化
-    return this.parseResult(raw);
+    const result = this.parseResult(raw);
+    if (result.confidence === 0) {
+      // 只记录字段摘要（哪些字段有值），不记录原始合同内容，避免业务数据进入日志系统
+      const keys = Object.entries(result.contract)
+        .filter(([, v]) => v !== null)
+        .map(([k]) => k);
+      this.logger.warn(`识别置信度为 0，有值字段：[${keys.join(', ') || '无'}]，请检查 AI 配置或 PDF 内容`);
+    }
+    return result;
   }
 
   /** 构造系统提示词，约束模型只输出 JSON */
   private buildSystemPrompt(): string {
     return [
-      '你是合同信息抽取助手。请从用户提供的合同文本中抽取结构化信息，严格按以下 JSON 格式输出，不要输出任何解释性文字或 markdown 代码块标记。',
+      '你是一个合同信息抽取 API。从用户提供的合同文本中提取指定字段，只输出一个 JSON 对象，',
+      '不要输出任何前缀文字、解释或 markdown 代码块标记（不要输出 ```json）。',
       '',
-      'JSON 结构：',
-      '{',
-      '  "contract": {',
-      '    "name": "合同名称，字符串或 null",',
-      '    "type": "合同类型原文，字符串或 null",',
-      '    "signSubject": "我方签约主体，字符串或 null",',
-      '    "counterparty": "相对方，字符串或 null",',
-      '    "amount": 合同总金额数字或 null,',
-      '    "currency": "币种原文，字符串或 null",',
-      '    "signDate": "签订日期 YYYY-MM-DD 或 null",',
-      '    "effectiveDate": "生效日期 YYYY-MM-DD 或 null",',
-      '    "expireDate": "到期日期 YYYY-MM-DD 或 null",',
-      '    "remark": "其他关键说明或 null"',
-      '  },',
-      '  "paymentPlans": [',
-      '    { "direction": "收款或付款", "planAmount": 金额数字或 null, "planDate": "YYYY-MM-DD 或 null", "remark": "说明或 null" }',
-      '  ]',
-      '}',
+      '需要提取的字段（找不到的填 null，不要臆造）：',
+      '- contract.name：合同全称',
+      '- contract.type：合同类型原文',
+      '- contract.signSubject：我方签约主体名称',
+      '- contract.counterparty：对方签约主体名称',
+      '- contract.amount：合同总金额，纯数字（不含货币符号与千分位）',
+      '- contract.currency：货币单位原文',
+      '- contract.signDate：签订日期，格式 YYYY-MM-DD',
+      '- contract.effectiveDate：生效日期，格式 YYYY-MM-DD',
+      '- contract.expireDate：到期日期，格式 YYYY-MM-DD',
+      '- contract.remark：其他关键备注',
+      '- paymentPlans：分期付款计划数组，无分期信息时为 []，每项包含：',
+      '  direction（"收款" 或 "付款"，从我方视角判断）、planAmount（纯数字）、planDate（YYYY-MM-DD）、remark',
       '',
-      '规则：',
-      '- 找不到的字段填 null，不要臆造。',
-      '- 金额只保留数字，不带货币符号与千分位。',
-      '- 日期统一为 YYYY-MM-DD。',
-      '- direction 从我方视角判断：我方收钱为"收款"，我方付钱为"付款"。',
-      '- 没有分期付款信息时 paymentPlans 返回空数组 []。',
+      '输出示例（仅展示格式，实际请提取真实内容）：',
+      '{"contract":{"name":"技术服务合同","type":"服务合同","signSubject":"甲方公司","counterparty":"乙方公司","amount":100000,"currency":"人民币","signDate":"2024-01-01","effectiveDate":"2024-01-01","expireDate":"2024-12-31","remark":null},"paymentPlans":[{"direction":"收款","planAmount":50000,"planDate":"2024-06-01","remark":null}]}',
     ].join('\n');
   }
 
@@ -93,7 +94,10 @@ export class ContractRecognizeService {
       throw new BadRequestException('识别失败，请重试或手动录入');
     }
 
-    const c = json.contract || {};
+    // 兼容两种结构：{ contract: {...}, paymentPlans: [...] } 或直接平铺字段
+    const knownFields = ['name', 'type', 'signSubject', 'counterparty', 'amount'];
+    const isFlat = !json.contract && knownFields.some((k) => json[k] !== undefined);
+    const c = json.contract || (isFlat ? json : {});
     const contract = {
       name: this.str(c.name),
       type: matchContractType(this.str(c.type)),

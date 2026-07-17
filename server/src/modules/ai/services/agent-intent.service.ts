@@ -34,7 +34,7 @@ export class AgentIntentService {
         temperature: 0,
         maxTokens: 16,
       });
-      return this.normalize(raw);
+      return this.normalize(raw, question);
     } catch (e) {
       this.logger.warn(`意图识别失败，使用规则兜底：${e instanceof Error ? e.message : e}`);
       return this.detectByKeyword(question);
@@ -70,20 +70,22 @@ export class AgentIntentService {
   private buildPrompt(): string {
     return [
       '你是一个意图分类器。请判断用户输入属于以下哪一类，只输出一个英文单词，不要输出其他任何内容：',
-      '- query：查询经营数据（合同数量/金额、收付款、履约节点、提醒等统计或明细问题）',
+      '- query：查询合同经营数据（包括：统计数量/金额、查看收付款、履约节点、提醒；"有哪些…合同"、"列出…合同"、"查…到期/逾期/未付"等明细查询也属于此类）',
       '- recognize：想要上传或识别合同文件',
-      '- navigate：想要打开某个页面或跳转到某个列表',
+      '- navigate：想要打开某个页面或跳转到某个列表（如"打开台账"、"去收付款页"）',
       '- chat：打招呼、询问功能、闲聊或无法归入以上类别',
       '',
       '只输出 query、recognize、navigate、chat 中的一个。',
     ].join('\n');
   }
 
-  private normalize(raw: string): AgentIntent {
+  private normalize(raw: string, question: string): AgentIntent {
     const text = (raw || '').toLowerCase();
     if (text.includes('query')) return 'query';
     if (text.includes('recognize')) return 'recognize';
     if (text.includes('navigate')) return 'navigate';
-    return 'chat';
+    // AI 返回了无法识别的内容，降级到关键词规则兜底，避免误判为 chat
+    this.logger.warn(`意图识别结果无法解析（raw="${(raw ?? '').slice(0, 40)}"），降级到关键词规则`);
+    return this.detectByKeyword(question);
   }
 }

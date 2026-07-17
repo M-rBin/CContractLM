@@ -41,8 +41,10 @@ export class TextToSqlService {
     try {
       generatedSql = await this.generateSql(config, question);
     } catch (e) {
-      await this.audit(userId, question, null, 0, 'failed', e instanceof Error ? e.message : 'AI 生成失败');
-      return { type: 'text', text: '抱歉，暂时无法处理这个问题，请稍后再试。' };
+      const errMsg = e instanceof Error ? e.message : 'AI 生成失败';
+      this.logger.error(`SQL 生成失败：${errMsg}`);
+      await this.audit(userId, question, null, 0, 'failed', errMsg);
+      return { type: 'text', text: 'AI 服务暂时不可用，请稍后重试。' };
     }
 
     // 2. 安全校验
