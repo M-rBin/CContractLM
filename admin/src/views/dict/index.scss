@@ -1,0 +1,146 @@
+.dict-page {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+
+  .type-card,
+  .info-card {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 12px;
+
+    :deep(.el-card__body) {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 16px;
+    }
+  }
+
+  .panel-header,
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  .panel-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--art-text-gray-900);
+    line-height: 24px;
+  }
+
+  .panel-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--art-text-gray-500);
+    line-height: 20px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .type-filter,
+  .filter-form {
+    flex-shrink: 0;
+  }
+
+  .filter-form {
+    @include responsiveFilterForm();
+    margin-bottom: 16px;
+  }
+
+  .type-list {
+    flex: 1;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .type-item {
+    width: 100%;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    border: 1px solid var(--el-border-color-light);
+    border-radius: 8px;
+    background: var(--el-bg-color);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, background-color 0.2s;
+
+    &:hover,
+    &.active {
+      border-color: var(--el-color-primary);
+      background: var(--el-color-primary-light-9);
+    }
+  }
+
+  .type-name,
+  .type-key {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .type-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--art-text-gray-900);
+  }
+
+  .type-key {
+    font-size: 12px;
+    color: var(--art-text-gray-500);
+  }
+
+  .type-pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+    flex-shrink: 0;
+  }
+
+  .table-container {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .pagination-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 960px) {
+  .dict-page {
+    grid-template-columns: 1fr;
+    overflow: auto;
+
+    .type-card {
+      min-height: 360px;
+    }
+
+    .info-card {
+      min-height: 560px;
+    }
+  }
+}
