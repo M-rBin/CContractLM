@@ -206,7 +206,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, reactive, ref } from 'vue'
+  import { computed, onActivated, onMounted, reactive, ref } from 'vue'
   import { useRouter } from 'vue-router'
   import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
   import { Document, Download, Plus, Search } from '@element-plus/icons-vue'
@@ -537,6 +537,11 @@
   onMounted(() => {
     loadList()
     loadUsers()
+    applyAiRecognizedData()
+  })
+
+  // keep-alive 激活时重新检查 AI 识别数据（标签页已打开时 onMounted 不会再触发）
+  onActivated(() => {
     applyAiRecognizedData()
   })
 </script>

@@ -24,6 +24,8 @@ interface ExtendedAxiosRequestConfig extends AxiosRequestConfig {
   timeout?: number // 允许覆盖默认超时时间（用于大文件上传）
   skipResponseValidation?: boolean // 跳过标准响应验证（用于原始响应如 GeoJSON）
   skipAuthHandler?: boolean // 跳过 401 统一处理（用于退出登录等终态请求，避免重入 logOut 与重复弹错）
+  retries?: number // 单请求最大重试次数（覆盖全局 MAX_RETRIES）
+  onRetry?: (attempt: number, maxRetries: number) => void // 每次重试前回调
 }
 
 const { VITE_API_URL, VITE_WITH_CREDENTIALS } = import.meta.env
@@ -138,6 +140,7 @@ function logOut() {
 /** 是否需要重试 */
 function shouldRetry(statusCode: number) {
   return [
+    ApiStatus.networkError,
     ApiStatus.requestTimeout,
     ApiStatus.internalServerError,
     ApiStatus.badGateway,
@@ -146,29 +149,38 @@ function shouldRetry(statusCode: number) {
   ].includes(statusCode)
 }
 
-/** 请求重试逻辑 */
-// 函数重载：skipResponseValidation 为 true 时返回原始数据
-async function retryRequest<T>(
-  config: ExtendedAxiosRequestConfig & { skipResponseValidation: true },
-  retries?: number
-): Promise<T>
-async function retryRequest<T>(
+/** 请求重试逻辑（内部递归用，不暴露给外部调用方） */
+async function retryRequestImpl<T>(
   config: ExtendedAxiosRequestConfig,
-  retries?: number
-): Promise<{ code: number; message: string; data: T }>
-async function retryRequest<T>(
-  config: ExtendedAxiosRequestConfig,
-  retries: number = MAX_RETRIES
+  retries: number,
+  maxRetries: number
 ): Promise<T | { code: number; message: string; data: T }> {
   try {
     return await request<T>(config as any)
   } catch (error) {
     if (retries > 0 && error instanceof HttpError && shouldRetry(error.code)) {
+      const attempt = maxRetries - retries + 1
+      config.onRetry?.(attempt, maxRetries)
       await delay(RETRY_DELAY)
-      return retryRequest<T>(config, retries - 1)
+      return retryRequestImpl<T>(config, retries - 1, maxRetries)
     }
     throw error
   }
+}
+
+/** 请求重试逻辑 */
+// 函数重载：skipResponseValidation 为 true 时返回原始数据
+async function retryRequest<T>(
+  config: ExtendedAxiosRequestConfig & { skipResponseValidation: true }
+): Promise<T>
+async function retryRequest<T>(
+  config: ExtendedAxiosRequestConfig
+): Promise<{ code: number; message: string; data: T }>
+async function retryRequest<T>(
+  config: ExtendedAxiosRequestConfig
+): Promise<T | { code: number; message: string; data: T }> {
+  const maxRetries = config.retries ?? MAX_RETRIES
+  return retryRequestImpl<T>(config, maxRetries, maxRetries)
 }
 
 /** 延迟函数 */

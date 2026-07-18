@@ -1,7 +1,16 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-// pdf-parse v2 改为 class 导出，不再有默认函数
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { PDFParse } = require('pdf-parse');
+
+type PDFParseInstance = {
+  getText(): Promise<{ text?: string }>;
+  getScreenshot(options: {
+    imageDataUrl: boolean;
+    scale: number;
+    first: number;
+  }): Promise<{ pages?: Array<{ dataUrl?: string }> }>;
+  destroy?: () => void;
+};
+
+type PDFParseCtor = new (options: { data: Buffer }) => PDFParseInstance;
 
 /** 识别所需的最小有效文本长度（低于此视为扫描件/空白件）
  *  图片型PDF过滤占位行后残留文本通常 < 10 字符；文本型合同正文一般远超 50 字符 */
@@ -23,6 +32,18 @@ const MAX_RENDER_PAGES = 8;
 export class PdfExtractService {
   private readonly logger = new Logger(PdfExtractService.name);
 
+  private loadParser(): PDFParseCtor {
+    try {
+      // pdf-parse v2 改为 class 导出，不再有默认函数；按需加载避免缺少可选依赖时阻断应用启动。
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require('pdf-parse').PDFParse as PDFParseCtor;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e).slice(0, 200);
+      this.logger.error(`PDF 解析依赖加载失败：${msg}`);
+      throw new BadRequestException('PDF 解析组件不可用，请联系管理员检查部署依赖');
+    }
+  }
+
   /**
    * 从 PDF buffer 提取文本
    * @param buffer PDF 文件内存缓冲
@@ -33,8 +54,9 @@ export class PdfExtractService {
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('文件内容为空');
     }
-    let parser: InstanceType<typeof PDFParse> | null = null;
+    let parser: PDFParseInstance | null = null;
     try {
+      const PDFParse = this.loadParser();
       parser = new PDFParse({ data: buffer });
       const result = await parser.getText();
       const raw = (result?.text || '').trim();
@@ -63,8 +85,9 @@ export class PdfExtractService {
    */
   async renderPagesAsImages(buffer: Buffer, maxPages = MAX_RENDER_PAGES): Promise<string[]> {
     if (!buffer || buffer.length === 0) return [];
-    let parser: InstanceType<typeof PDFParse> | null = null;
+    let parser: PDFParseInstance | null = null;
     try {
+      const PDFParse = this.loadParser();
       parser = new PDFParse({ data: buffer });
       const result = await parser.getScreenshot({ imageDataUrl: true, scale: 2, first: maxPages });
       return (result?.pages || [])

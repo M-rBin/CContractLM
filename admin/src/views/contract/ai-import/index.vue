@@ -22,7 +22,7 @@
       </div>
 
       <!-- recognizing：识别中 -->
-      <div v-else-if="status === 'recognizing'" class="state-zone" v-loading="true" element-loading-text="正在识别合同信息...">
+      <div v-else-if="status === 'recognizing'" class="state-zone" v-loading="true" :element-loading-text="loadingText">
         <div class="state-placeholder" />
       </div>
 
@@ -77,6 +77,7 @@
   const status = ref<Status>('idle')
   const result = ref<RecognizeResult | null>(null)
   const errorMsg = ref('')
+  const loadingText = ref('正在识别合同信息...')
   /** 保留原始 File，填入登记表单时一并传过去作为附件 */
   const sourceFile = ref<File | null>(null)
 
@@ -101,8 +102,11 @@
     const formData = new FormData()
     formData.append('file', raw)
     status.value = 'recognizing'
+    loadingText.value = '正在识别合同信息...'
     try {
-      const { data } = await recognizeContract(formData)
+      const { data } = await recognizeContract(formData, (attempt, max) => {
+        loadingText.value = `网络异常，第 ${attempt}/${max} 次重试...`
+      })
       result.value = data
       sourceFile.value = raw
       status.value = 'done'
@@ -131,6 +135,7 @@
     status.value = 'idle'
     result.value = null
     errorMsg.value = ''
+    loadingText.value = '正在识别合同信息...'
     sourceFile.value = null
   }
 

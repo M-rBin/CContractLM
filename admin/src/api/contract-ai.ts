@@ -30,12 +30,18 @@ export interface RecognizeResult {
 }
 
 /**
- * 上传合同 PDF 进行智能识别
+ * 上传合同 PDF 进行智能识别，网络异常时自动重试最多 3 次
  * @param data 含 file 字段的 FormData
+ * @param onRetry 每次重试前回调，参数为当前第几次重试和最大重试次数
  */
-export function recognizeContract(data: FormData) {
+export function recognizeContract(
+  data: FormData,
+  onRetry?: (attempt: number, maxRetries: number) => void
+) {
   return request.post<RecognizeResult>({
     url: '/admin/contract/ai/recognize',
-    data
+    data,
+    retries: 3,
+    onRetry
   })
 }

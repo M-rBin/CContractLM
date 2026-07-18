@@ -89,13 +89,14 @@
 
         <ElTabPane label="附件归档" name="attachments">
           <div class="toolbar">
-            <ElSelect v-model="attachmentCategory" placeholder="附件分类" class="toolbar-select">
+            <ElSelect v-model="attachmentCategory" placeholder="附件分类" class="toolbar-select" :disabled="uploading">
               <ElOption v-for="item in CONTRACT_ATTACHMENT_CATEGORIES" :key="item" :label="item" :value="item" />
             </ElSelect>
-            <ElUpload :show-file-list="false" :http-request="uploadFile">
-              <ElButton type="primary" :icon="Upload">上传附件</ElButton>
+            <ElUpload :show-file-list="false" :http-request="uploadFile" :disabled="uploading">
+              <ElButton type="primary" :icon="Upload" :loading="uploading">上传附件</ElButton>
             </ElUpload>
           </div>
+          <ElProgress v-if="uploading" :percentage="uploadPercent" :stroke-width="4" style="margin-bottom: 12px" />
           <ElTable :data="detail?.attachments || []">
             <ElTableColumn prop="category" label="分类" width="120" />
             <ElTableColumn prop="fileName" label="文件名称" min-width="220" show-overflow-tooltip />
@@ -204,6 +205,8 @@
   const detail = ref<ContractDetailData>()
   const activeTab = ref('milestones')
   const attachmentCategory = ref('合同正文')
+  const uploading = ref(false)
+  const uploadPercent = ref(0)
   const milestoneDialog = ref(false)
   const completeDialog = ref(false)
   const paymentDialog = ref(false)
@@ -220,13 +223,24 @@
   }
 
   async function uploadFile(option: any) {
+    uploading.value = true
+    uploadPercent.value = 0
     const form = new FormData()
     form.append('contractId', String(contractId))
     form.append('category', attachmentCategory.value)
     form.append('file', option.file)
-    await uploadContractAttachment(form)
-    ElMessage.success('新增成功')
-    loadDetail()
+    try {
+      await uploadContractAttachment(form, (percent) => {
+        uploadPercent.value = percent
+      })
+      ElMessage.success('上传成功')
+      loadDetail()
+    } catch {
+      ElMessage.error('上传失败，请重试')
+    } finally {
+      uploading.value = false
+      uploadPercent.value = 0
+    }
   }
 
   async function downloadFile(row: any) {

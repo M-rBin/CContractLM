@@ -172,10 +172,17 @@ export function getContractDetail(contractId: number) {
   })
 }
 
-export function uploadContractAttachment(data: FormData) {
+export function uploadContractAttachment(
+  data: FormData,
+  onUploadProgress?: (percent: number) => void
+) {
   return request.post<ContractAttachment>({
     url: '/admin/contract/attachment/upload',
-    data
+    data,
+    timeout: 0,
+    onUploadProgress: onUploadProgress
+      ? (e: any) => { onUploadProgress(Math.round((e.loaded * 100) / (e.total && e.total > 0 ? e.total : e.loaded))) }
+      : undefined
   })
 }
 

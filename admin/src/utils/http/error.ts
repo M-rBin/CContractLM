@@ -102,7 +102,7 @@ export function handleError(error: AxiosError<ErrorResponse>): never {
 
   // 处理网络错误
   if (!error.response) {
-    throw new HttpError($t('httpMsg.networkError'), ApiStatus.error, {
+    throw new HttpError($t('httpMsg.networkError'), ApiStatus.networkError, {
       url: requestConfig?.url,
       method: requestConfig?.method?.toUpperCase()
     })
