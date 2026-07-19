@@ -39,6 +39,15 @@ declare namespace Api {
     interface LoginParams {
       username: string
       password: string
+      /** 选择的公司 ID，单公司时可省略 */
+      tenantId?: number
+    }
+
+    /** 公司（租户）信息 */
+    interface TenantItem {
+      id: number
+      name: string
+      code: string
     }
 
     /** 部门信息 */

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma.service';
 import { BaseService, PageOptions } from '@/common/crud';
@@ -27,10 +27,10 @@ export class ContractService extends BaseService {
     super(prisma, 'contractInfo');
   }
 
-  async pageContracts(query: ContractQuery) {
+  async pageContracts(query: ContractQuery, tenantId?: number) {
     const page = Math.max(Number(query.page || 1), 1);
     const pageSize = Math.min(Math.max(Number(query.pageSize || 20), 1), 100);
-    const where = this.buildWhere(query);
+    const where = this.buildWhere(query, tenantId);
 
     const [rawList, total] = await Promise.all([
       this.prisma.contractInfo.findMany({
@@ -63,23 +63,33 @@ export class ContractService extends BaseService {
     return { list, pagination: { page, pageSize, total } };
   }
 
-  async createContract(dto: AddContractDto) {
-    await this.validateBusiness(dto);
-    return this.prisma.contractInfo.create({ data: this.toPrismaData(dto) });
+  async verifyTenantAccess(id: number, tenantId?: number) {
+    if (!tenantId) return;
+    const contract = await this.prisma.contractInfo.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!contract) throw new ForbiddenException('无权访问该合同');
   }
 
-  async updateContract(dto: UpdateContractDto) {
+  async createContract(dto: AddContractDto, tenantId?: number) {
+    await this.validateBusiness(dto, undefined, tenantId);
+    return this.prisma.contractInfo.create({ data: this.toPrismaData(dto, tenantId) });
+  }
+
+  async updateContract(dto: UpdateContractDto, tenantId?: number) {
     const { id, ...data } = dto;
-    await this.validateBusiness(data, id);
+    await this.verifyTenantAccess(id, tenantId);
+    await this.validateBusiness(data, id, tenantId);
     return this.prisma.contractInfo.update({
       where: { id },
       data: this.toPrismaData(data),
     });
   }
 
-  async listForExport(query: ContractQuery) {
+  async listForExport(query: ContractQuery, tenantId?: number) {
     return this.prisma.contractInfo.findMany({
-      where: this.buildWhere(query),
+      where: this.buildWhere(query, tenantId),
       orderBy: { id: 'desc' },
     });
   }
@@ -94,8 +104,9 @@ export class ContractService extends BaseService {
     });
   }
 
-  private buildWhere(query: ContractQuery): Prisma.ContractInfoWhereInput {
+  private buildWhere(query: ContractQuery, tenantId?: number): Prisma.ContractInfoWhereInput {
     const where: Prisma.ContractInfoWhereInput = {};
+    if (tenantId !== undefined && tenantId !== 0) where.tenantId = tenantId;
     if (query.keyword) {
       where.OR = ['code', 'name', 'counterparty', 'signSubject'].map((field) => ({
         [field]: { contains: query.keyword },
@@ -124,7 +135,7 @@ export class ContractService extends BaseService {
     };
   }
 
-  private async validateBusiness(dto: Partial<AddContractDto>, id?: number) {
+  private async validateBusiness(dto: Partial<AddContractDto>, id?: number, tenantId?: number) {
     if (dto.signDate && dto.effectiveDate && new Date(dto.effectiveDate) < new Date(dto.signDate)) {
       throw new BadRequestException('日期填写有误，请检查签订、生效、到期日期的先后顺序');
     }
@@ -135,6 +146,7 @@ export class ContractService extends BaseService {
       const exists = await this.prisma.contractInfo.findFirst({
         where: {
           code: dto.code,
+          ...(tenantId ? { tenantId } : {}),
           ...(id ? { id: { not: id } } : {}),
         },
         select: { code: true },
@@ -145,7 +157,7 @@ export class ContractService extends BaseService {
     }
   }
 
-  private toPrismaData(dto: Partial<AddContractDto>): Prisma.ContractInfoUncheckedCreateInput {
+  private toPrismaData(dto: Partial<AddContractDto>, tenantId?: number): Prisma.ContractInfoUncheckedCreateInput {
     return {
       code: dto.code!,
       name: dto.name!,
@@ -161,6 +173,7 @@ export class ContractService extends BaseService {
       ownerName: dto.ownerName,
       status: dto.status || '草稿',
       remark: dto.remark,
+      ...(tenantId ? { tenantId } : {}),
     };
   }
 }

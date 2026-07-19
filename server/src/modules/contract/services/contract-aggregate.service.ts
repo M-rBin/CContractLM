@@ -29,6 +29,7 @@ interface AnalysisQuery {
   dateEnd?: string;
   type?: string;
   status?: string;
+  tenantId?: number;
 }
 
 @Injectable()
@@ -56,6 +57,7 @@ export class ContractAggregateService {
         content: `合同【${contract.name}】将于${this.dateText(contract.expireDate)}到期`,
         planDate: contract.expireDate,
         overdueStatus: contract.expireDate < today ? '已逾期' : '未逾期',
+        ...(contract.tenantId ? { tenantId: contract.tenantId } : {}),
       });
     }
 
@@ -73,13 +75,15 @@ export class ContractAggregateService {
         content: `合同【${item.contract.name}】履约节点【${item.name}】计划于${this.dateText(item.planDate)}完成`,
         planDate: item.planDate,
         overdueStatus: overdue ? '已逾期' : '未逾期',
+        ...(item.contract.tenantId ? { tenantId: item.contract.tenantId } : {}),
       });
     }
   }
 
-  async pageReminders(query: ReminderQuery) {
+  async pageReminders(query: ReminderQuery, tenantId?: number) {
     await this.scanReminders();
     const where: Prisma.ContractReminderWhereInput = {
+      ...(tenantId !== undefined && tenantId !== 0 ? { tenantId } : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(query.overdueStatus ? { overdueStatus: query.overdueStatus } : {}),
       ...(query.handleStatus ? { handleStatus: query.handleStatus } : {}),
@@ -107,8 +111,8 @@ export class ContractAggregateService {
     });
   }
 
-  async pagePayments(query: PaymentQuery) {
-    const where = this.buildPaymentWhere(query);
+  async pagePayments(query: PaymentQuery, tenantId?: number) {
+    const where = this.buildPaymentWhere(query, tenantId);
     const result = await this.page('contractPaymentPlan', query, where, { contract: true });
     return {
       ...result,
@@ -122,14 +126,14 @@ export class ContractAggregateService {
     };
   }
 
-  async paymentStat(query: PaymentQuery) {
-    const rows = await this.prisma.contractPaymentPlan.findMany({ where: this.buildPaymentWhere(query) });
+  async paymentStat(query: PaymentQuery, tenantId?: number) {
+    const rows = await this.prisma.contractPaymentPlan.findMany({ where: this.buildPaymentWhere(query, tenantId) });
     return this.sumPaymentRows(rows);
   }
 
-  async listPaymentsForExport(query: PaymentQuery) {
+  async listPaymentsForExport(query: PaymentQuery, tenantId?: number) {
     return this.prisma.contractPaymentPlan.findMany({
-      where: this.buildPaymentWhere(query),
+      where: this.buildPaymentWhere(query, tenantId),
       include: { contract: true },
       orderBy: { id: 'desc' },
     });
@@ -139,9 +143,13 @@ export class ContractAggregateService {
     return this.detailService.registerPayment(dto, operatorId);
   }
 
-  async workbenchOverview() {
-    const contracts = await this.prisma.contractInfo.findMany();
-    const payments = await this.prisma.contractPaymentPlan.findMany();
+  async workbenchOverview(tenantId?: number) {
+    const tenantFilter = tenantId !== undefined && tenantId !== 0 ? { tenantId } : {};
+    const contracts = await this.prisma.contractInfo.findMany({ where: tenantFilter });
+    const contractIds = contracts.map((item) => item.id);
+    const payments = await this.prisma.contractPaymentPlan.findMany({
+      where: contractIds.length ? { contractId: { in: contractIds } } : { id: -1 },
+    });
     return {
       metrics: {
         totalCount: contracts.length,
@@ -159,28 +167,44 @@ export class ContractAggregateService {
     };
   }
 
-  async workbenchTodos(type?: string) {
+  async workbenchTodos(type?: string, tenantId?: number) {
     await this.scanReminders();
+    const where: Prisma.ContractReminderWhereInput = {
+      handleStatus: '待处理',
+      ...(type ? { type } : {}),
+      ...(tenantId !== undefined && tenantId !== 0 ? { tenantId } : {}),
+    };
     const reminders = await this.prisma.contractReminder.findMany({
-      where: { handleStatus: '待处理', ...(type ? { type } : {}) },
+      where,
       orderBy: { planDate: 'asc' },
       take: 10,
     });
     return reminders;
   }
 
-  async workbenchRecent() {
+  async workbenchRecent(tenantId?: number) {
+    const tenantFilter = tenantId !== undefined && tenantId !== 0 ? { tenantId } : {};
     return {
-      recentContracts: await this.prisma.contractInfo.findMany({ orderBy: { id: 'desc' }, take: 5 }),
-      recentMilestones: await this.prisma.contractMilestone.findMany({ where: { status: '已完成' }, orderBy: { updateTime: 'desc' }, take: 5 }),
-      recentPayments: await this.prisma.contractPaymentPlan.findMany({ where: { status: '已完成' }, orderBy: { updateTime: 'desc' }, take: 5 }),
+      recentContracts: await this.prisma.contractInfo.findMany({ where: tenantFilter, orderBy: { id: 'desc' }, take: 5 }),
+      recentMilestones: await this.prisma.contractMilestone.findMany({
+        where: { status: '已完成', ...(tenantFilter.tenantId ? { contract: { tenantId: tenantFilter.tenantId } } : {}) },
+        orderBy: { updateTime: 'desc' },
+        take: 5,
+      }),
+      recentPayments: await this.prisma.contractPaymentPlan.findMany({
+        where: { status: '已完成', ...(tenantFilter.tenantId ? { contract: { tenantId: tenantFilter.tenantId } } : {}) },
+        orderBy: { updateTime: 'desc' },
+        take: 5,
+      }),
     };
   }
 
-  async analysisOverview(query: AnalysisQuery) {
+  async analysisOverview(query: AnalysisQuery, tenantId?: number) {
     const contractWhere: Prisma.ContractInfoWhereInput = {
       ...(query.type ? { type: query.type } : {}),
       ...(query.status ? { status: query.status } : {}),
+      // tenantId=0 表示超管查全库，undefined 同理；有具体值才加过滤
+      ...(tenantId !== undefined && tenantId !== 0 ? { tenantId } : {}),
     };
     this.applyDateRange(contractWhere, 'signDate', query.dateStart, query.dateEnd);
     const contracts = await this.prisma.contractInfo.findMany({ where: contractWhere });
@@ -219,8 +243,9 @@ export class ContractAggregateService {
     return this.prisma.contractReminder.create({ data });
   }
 
-  private buildPaymentWhere(query: PaymentQuery): Prisma.ContractPaymentPlanWhereInput {
+  private buildPaymentWhere(query: PaymentQuery, tenantId?: number): Prisma.ContractPaymentPlanWhereInput {
     const where: Prisma.ContractPaymentPlanWhereInput = {
+      ...(tenantId !== undefined && tenantId !== 0 ? { tenantId } : {}),
       ...(query.direction ? { direction: query.direction } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.contractName ? { contract: { name: { contains: query.contractName } } } : {}),

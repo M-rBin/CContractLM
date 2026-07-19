@@ -47,9 +47,10 @@ model SysUser {
   /// 更新时间
   updateTime   DateTime @updatedAt
 
-  department SysDepartment? @relation(fields: [departmentId], references: [id])
-  position   SysPosition?   @relation(fields: [positionId], references: [id])
-  userRoles  SysUserRole[]
+  department  SysDepartment?  @relation(fields: [departmentId], references: [id])
+  position    SysPosition?    @relation(fields: [positionId], references: [id])
+  userRoles   SysUserRole[]
+  userTenants SysUserTenant[]
 
   @@index([departmentId])
   @@index([positionId])
@@ -819,4 +820,43 @@ model ContractAgentSqlAudit {
   @@index([status])
   @@index([tenantId])
   @@map("contract_agent_sql_audit")
+}
+
+// ==================== 多租户 ====================
+
+/// 公司/账套
+model SysTenant {
+  id         Int      @id @default(autoincrement())
+  /// 公司名称（显示用）
+  name       String   @db.VarChar(100)
+  /// 公司编码（全局唯一）
+  code       String   @unique @db.VarChar(50)
+  /// 状态 1=启用 0=停用
+  status     Int      @default(1)
+  /// 备注
+  remark     String?  @db.VarChar(200)
+  /// 创建时间
+  createTime DateTime @default(now())
+  /// 更新时间
+  updateTime DateTime @updatedAt
+
+  userTenants SysUserTenant[]
+
+  @@index([status])
+  @@map("base_sys_tenant")
+}
+
+/// 用户-公司关联（多对多）
+model SysUserTenant {
+  id       Int @id @default(autoincrement())
+  userId   Int
+  tenantId Int
+
+  user   SysUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant SysTenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@map("base_sys_user_tenant")
 }

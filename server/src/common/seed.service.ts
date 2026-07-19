@@ -344,6 +344,80 @@ export class SeedService {
       orderNum: 3,
       parentId: systemDir.id,
     });
+
+    await this.ensureMenu({
+      name: '公司管理',
+      type: 1,
+      router: '/system/tenant',
+      perms: 'sys:tenant:list',
+      viewPath: '/system/tenant/index.vue',
+      icon: 'OfficeBuilding',
+      orderNum: 4,
+      parentId: systemDir.id,
+    });
+
+    // 组织管理
+    const orgDir = await this.ensureMenu({
+      name: '组织管理',
+      type: 0,
+      router: '/organization',
+      icon: 'OfficeBuilding',
+      orderNum: 10,
+    });
+    await this.ensureMenu({
+      name: '部门管理',
+      type: 1,
+      router: '/organization/department',
+      perms: 'sys:department:list',
+      viewPath: '/organization/department/index.vue',
+      orderNum: 1,
+      parentId: orgDir.id,
+    });
+    await this.ensureMenu({
+      name: '人员管理',
+      type: 1,
+      router: '/organization/user',
+      perms: 'sys:user:list',
+      viewPath: '/organization/user/index.vue',
+      orderNum: 2,
+      parentId: orgDir.id,
+    });
+    await this.ensureMenu({
+      name: '岗位管理',
+      type: 1,
+      router: '/organization/position',
+      perms: 'sys:position:list',
+      viewPath: '/organization/position/index.vue',
+      orderNum: 3,
+      parentId: orgDir.id,
+    });
+
+    // 权限管理
+    const permDir = await this.ensureMenu({
+      name: '权限管理',
+      type: 0,
+      router: '/permission',
+      icon: 'Lock',
+      orderNum: 20,
+    });
+    await this.ensureMenu({
+      name: '角色管理',
+      type: 1,
+      router: '/permission/role',
+      perms: 'sys:role:list',
+      viewPath: '/permission/role/index.vue',
+      orderNum: 1,
+      parentId: permDir.id,
+    });
+    await this.ensureMenu({
+      name: '菜单管理',
+      type: 1,
+      router: '/permission/menu',
+      perms: 'sys:menu:list',
+      viewPath: '/permission/menu/index.vue',
+      orderNum: 2,
+      parentId: permDir.id,
+    });
   }
 
   /** 同步合同管理菜单（用于已有数据库补齐新增业务菜单） */
@@ -715,6 +789,11 @@ export class SeedService {
       { username: 'zhao.lin', name: '赵琳', nickName: '市场', workId: 'M001', departmentId: marketDept?.id, positionId: marketPos?.id, roles: [deptMgrRole] },
     ];
 
+    const defaultTenant = await this.prisma.sysTenant.findFirst({
+      where: { status: 1 },
+      orderBy: { id: 'asc' },
+    });
+
     for (const u of users) {
       const { roles, ...userData } = u;
       const user = await this.prisma.sysUser.upsert({
@@ -729,6 +808,14 @@ export class SeedService {
           where: { userId_roleId: { userId: user.id, roleId: role.id } },
           update: {},
           create: { userId: user.id, roleId: role.id },
+        });
+      }
+
+      if (defaultTenant) {
+        await this.prisma.sysUserTenant.upsert({
+          where: { userId_tenantId: { userId: user.id, tenantId: defaultTenant.id } },
+          update: {},
+          create: { userId: user.id, tenantId: defaultTenant.id },
         });
       }
     }

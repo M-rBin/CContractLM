@@ -15,8 +15,9 @@ export class ContractPaymentManageController extends BaseController {
   @Get('list')
   @Perms('list')
   @ApiOperation({ summary: '分页查询收付款计划' })
-  async list(@Query() query: PageOptions & Record<string, any>) {
-    return this.ok(await this.aggregateService.pagePayments(query));
+  async list(@Query() query: PageOptions & Record<string, any>, @Admin() admin: any) {
+    const tenantId = admin?.username === 'admin' ? undefined : (admin?.tenantId || undefined);
+    return this.ok(await this.aggregateService.pagePayments(query, tenantId));
   }
 
   @Put('register')
@@ -29,8 +30,9 @@ export class ContractPaymentManageController extends BaseController {
   @Get('stat')
   @Perms('stat')
   @ApiOperation({ summary: '查询收付款统计' })
-  async stat(@Query() query: Record<string, any>) {
-    return this.ok(await this.aggregateService.paymentStat(query));
+  async stat(@Query() query: Record<string, any>, @Admin() admin: any) {
+    const tenantId = admin?.username === 'admin' ? undefined : (admin?.tenantId || undefined);
+    return this.ok(await this.aggregateService.paymentStat(query, tenantId));
   }
 
   @Get('export')
@@ -38,8 +40,9 @@ export class ContractPaymentManageController extends BaseController {
   @ApiOperation({ summary: '导出收付款计划' })
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="payments.csv"')
-  async export(@Query() query: Record<string, any>) {
-    const rows = await this.aggregateService.listPaymentsForExport(query);
+  async export(@Query() query: Record<string, any>, @Admin() admin: any) {
+    const tenantId = admin?.username === 'admin' ? undefined : (admin?.tenantId || undefined);
+    const rows = await this.aggregateService.listPaymentsForExport(query, tenantId);
     const header = ['合同名称', '相对方', '方向', '计划金额', '计划日期', '实际金额', '实际日期', '状态'];
     const body = rows.map((row: any) => [
       row.contract?.name || '',

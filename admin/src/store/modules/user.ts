@@ -33,6 +33,8 @@ export const useUserStore = defineStore(
     const accessToken = ref('')
     // 刷新令牌
     const refreshToken = ref('')
+    // 当前登录公司 ID（0 表示超管不限制公司）
+    const tenantId = ref<number>(0)
 
     // 计算属性：获取用户信息
     const getUserInfo = computed(() => info.value)
@@ -41,60 +43,31 @@ export const useUserStore = defineStore(
     // 计算属性：获取工作台状态
     const getWorktabState = computed(() => useWorktabStore().$state)
 
-    /**
-     * 设置用户信息
-     * @param newInfo 新的用户信息
-     */
     const setUserInfo = (newInfo: Api.Auth.UserInfo) => {
       info.value = newInfo
     }
 
-    /**
-     * 设置登录状态
-     * @param status 登录状态
-     */
     const setLoginStatus = (status: boolean) => {
       isLogin.value = status
     }
 
-    /**
-     * 设置语言
-     * @param lang 语言枚举值
-     */
     const setLanguage = (lang: LanguageEnum) => {
       setPageTitle(router.currentRoute.value)
       language.value = lang
     }
 
-    /**
-     * 设置搜索历史
-     * @param list 搜索历史列表
-     */
     const setSearchHistory = (list: AppRouteRecord[]) => {
       searchHistory.value = list
     }
 
-    /**
-     * 设置锁屏状态
-     * @param status 锁屏状态
-     */
     const setLockStatus = (status: boolean) => {
       isLock.value = status
     }
 
-    /**
-     * 设置锁屏密码
-     * @param password 锁屏密码
-     */
     const setLockPassword = (password: string) => {
       lockPassword.value = password
     }
 
-    /**
-     * 设置令牌
-     * @param newAccessToken 访问令牌
-     * @param newRefreshToken 刷新令牌（可选）
-     */
     const setToken = (newAccessToken: string, newRefreshToken?: string) => {
       accessToken.value = newAccessToken
       if (newRefreshToken) {
@@ -102,36 +75,28 @@ export const useUserStore = defineStore(
       }
     }
 
+    const setTenantId = (id: number) => {
+      tenantId.value = id
+    }
+
     /**
      * 退出登录
      * 清空所有用户相关状态并跳转到登录页
      */
     const logOut = () => {
-      // 先读出当前 token 再清状态：通知后端退出（清 Redis token）需带有效 token，
-      // 否则本地状态同步清空后请求会因无 token 而 401。skipAuthHandler 已避免该请求的 401 重入登出。
       const currentToken = accessToken.value
       fetchLogout(currentToken).catch(() => {})
-      // 清空用户信息
       info.value = {}
-      // 重置登录状态
       isLogin.value = false
-      // 重置锁屏状态
       isLock.value = false
-      // 清空锁屏密码
       lockPassword.value = ''
-      // 清空访问令牌
       accessToken.value = ''
-      // 清空刷新令牌
       refreshToken.value = ''
-      // 清空工作台已打开页面
+      tenantId.value = 0
       useWorktabStore().opened = []
-      // 移除iframe路由缓存
       sessionStorage.removeItem('iframeRoutes')
-      // 清空主页路径
       useMenuStore().setHomePath('')
-      // 重置路由状态
       resetRouterState()
-      // 跳转到登录页
       router.push({ name: 'Login' })
     }
 
@@ -144,6 +109,7 @@ export const useUserStore = defineStore(
       searchHistory,
       accessToken,
       refreshToken,
+      tenantId,
       getUserInfo,
       getSettingState,
       getWorktabState,
@@ -154,6 +120,7 @@ export const useUserStore = defineStore(
       setLockStatus,
       setLockPassword,
       setToken,
+      setTenantId,
       logOut
     }
   },

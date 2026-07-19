@@ -21,13 +21,12 @@ export class AuthService {
 
   /**
    * 用户登录
-   * 校验用户名密码（bcrypt 比对），签发 access/refresh token 并写入 Redis，同时预热权限缓存。
+   * 校验用户名密码（bcrypt 比对），校验公司归属，签发含 tenantId 的 access/refresh token。
    * @param username 用户名
    * @param password 明文密码
-   * @returns access token、refresh token 及 access token 过期秒数
-   * @throws BadRequestException 用户不存在、已禁用或密码错误
+   * @param tenantId 登录时选择的公司 ID（超级管理员传 0 表示不限制）
    */
-  async login(username: string, password: string) {
+  async login(username: string, password: string, tenantId?: number) {
     const user = await this.prisma.sysUser.findUnique({
       where: { username },
       include: { userRoles: { include: { role: true } } },
@@ -46,16 +45,34 @@ export class AuthService {
       throw new BadRequestException('用户名或密码错误');
     }
 
+    // 超级管理员不校验公司归属，tenantId 固定为 0
+    const isSuperAdmin = username === 'admin';
+    let resolvedTenantId = 0;
+
+    if (!isSuperAdmin) {
+      if (!tenantId) {
+        throw new BadRequestException('请选择登录公司');
+      }
+      // 校验用户与公司的关联关系，且公司必须为启用状态
+      const userTenant = await this.prisma.sysUserTenant.findFirst({
+        where: { userId: user.id, tenantId },
+        include: { tenant: { select: { status: true } } },
+      });
+      if (!userTenant || userTenant.tenant.status !== 1) {
+        throw new BadRequestException('无权访问该公司');
+      }
+      resolvedTenantId = tenantId;
+    }
+
     const roleIds = user.userRoles.map((ur) => ur.roleId);
     const tokenPayload = {
       userId: user.id,
       username: user.username,
       roleIds,
+      tenantId: resolvedTenantId,
       passwordVersion: user.passwordV,
     };
 
-    // configService.get 运行时返回字符串，必须转为数字。
-    // 否则 jsonwebtoken 会把 "7200" 当作 ms 时间串解析为 7.2 秒。
     const accessExpire = Number(this.configService.get<number>('JWT_ACCESS_EXPIRE', 7200));
     const refreshExpire = Number(this.configService.get<number>('JWT_REFRESH_EXPIRE', 1296000));
 
@@ -79,12 +96,36 @@ export class AuthService {
   }
 
   /**
+   * 获取用户可登录的公司列表
+   * 用户名输入框失焦时调用，返回该账号关联且状态为启用的公司列表。
+   * 超级管理员返回所有启用公司。
+   * @param username 用户名
+   */
+  async getTenantList(username: string) {
+    if (username === 'admin') {
+      return this.prisma.sysTenant.findMany({
+        where: { status: 1 },
+        select: { id: true, name: true },
+        orderBy: { id: 'asc' },
+      });
+    }
+
+    const user = await this.prisma.sysUser.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (!user) return [];
+
+    const relations = await this.prisma.sysUserTenant.findMany({
+      where: { userId: user.id, tenant: { status: 1 } },
+      include: { tenant: { select: { id: true, name: true } } },
+    });
+    return relations.map((r) => ({ id: r.tenant.id, name: r.tenant.name }));
+  }
+
+  /**
    * 刷新 access token
-   * 校验 refresh token 的有效性（签名、isRefresh 标记、Redis 留存、passwordVersion 未变更），
-   * 通过后签发新的 access token 并更新缓存。
-   * @param refreshToken 客户端持有的 refresh token
-   * @returns 新的 access token 及过期秒数
-   * @throws BadRequestException token 无效或已失效
+   * 校验 refresh token 的有效性，通过后签发新的 access token（含 tenantId）。
    */
   async refreshToken(refreshToken: string) {
     try {
@@ -107,7 +148,13 @@ export class AuthService {
 
       const accessExpire = Number(this.configService.get<number>('JWT_ACCESS_EXPIRE', 7200));
       const newToken = this.jwtService.sign(
-        { userId: user.id, username: user.username, roleIds: payload.roleIds, passwordVersion: user.passwordV },
+        {
+          userId: user.id,
+          username: user.username,
+          roleIds: payload.roleIds,
+          tenantId: payload.tenantId ?? 0,
+          passwordVersion: user.passwordV,
+        },
         { expiresIn: accessExpire },
       );
 
@@ -122,9 +169,6 @@ export class AuthService {
 
   /**
    * 获取用户权限标识列表
-   * 优先读取 Redis 缓存，缓存缺失或解析失败时回源数据库并重建缓存。
-   * @param userId 用户 ID
-   * @returns 权限标识（perms）字符串数组
    */
   async getPerms(userId: number) {
     const permsStr = await this.redis.get(`admin:perms:${userId}`);
@@ -145,10 +189,9 @@ export class AuthService {
     const roleIds = user.userRoles.map((ur) => ur.roleId);
     return this.cachePerms(userId, roleIds);
   }
+
   /**
    * 获取当前登录用户的资料信息
-   * @param userId 用户 ID
-   * @returns 用户基础信息，含部门与所属角色（不含密码等敏感字段）
    */
   async getAdminInfo(userId: number) {
     const user = await this.prisma.sysUser.findUnique({
@@ -174,8 +217,6 @@ export class AuthService {
 
   /**
    * 用户登出
-   * 清除该用户的 access token、refresh token 及权限缓存，使其立即失效。
-   * @param userId 用户 ID
    */
   async logout(userId: number) {
     await this.redis.del(`admin:token:${userId}`);
@@ -185,21 +226,11 @@ export class AuthService {
 
   /**
    * 生成密码哈希
-   * 使用 bcrypt（cost 12）对明文密码加盐哈希，用于存储与比对。
-   * @param password 明文密码
-   * @returns 哈希后的密码串
    */
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 12);
   }
 
-  /**
-   * 计算并缓存用户权限标识
-   * 汇总用户所有角色关联菜单的 perms，去重后写入 Redis 缓存。
-   * @param userId 用户 ID
-   * @param roleIds 用户拥有的角色 ID 列表
-   * @returns 去重后的权限标识数组；无角色时返回空数组
-   */
   private async cachePerms(userId: number, roleIds: number[]): Promise<string[]> {
     if (!roleIds.length) return [];
 
@@ -219,4 +250,3 @@ export class AuthService {
     return uniquePerms;
   }
 }
-

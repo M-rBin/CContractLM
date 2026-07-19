@@ -1,5 +1,6 @@
-import { Get, Param, ParseIntPipe, Query, Type } from '@nestjs/common';
+import { Get, Param, ParseIntPipe, Query, Req, Type } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { Request } from 'express';
 import { CrudControllerBase } from './crud-controller.base';
 import { PageOptions } from './base.service';
 import { ApiResult, ApiPageResult } from '../decorators/api-result.decorator';
@@ -32,8 +33,8 @@ export function CrudControllerFactory<T extends Type<any>>(vo: T): typeof CrudCo
     @ApiQuery({ name: 'order', required: false, description: '排序字段，默认 id' })
     @ApiQuery({ name: 'sort', required: false, enum: ['asc', 'desc'], description: '排序方向，默认 desc' })
     @ApiPageResult(vo)
-    async list(@Query() query: PageOptions & Record<string, any>) {
-      return super.list(query);
+    async list(@Query() query: PageOptions & Record<string, any>, @Req() req: Request & { admin?: any }) {
+      return super.list(query, req);
     }
 
     /** 详情（data 精确到 VO） */

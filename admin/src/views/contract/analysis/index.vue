@@ -2,6 +2,12 @@
   <div class="contract-analysis">
     <ElCard shadow="never" class="filter-card">
       <ElForm :model="query" :inline="true" class="filter-form">
+        <!-- 超级管理员专属：企业筛选器 -->
+        <ElFormItem v-if="isSuperAdmin" label="企业">
+          <ElSelect v-model="query.tenantId" placeholder="全部企业" clearable class="filter-select">
+            <ElOption v-for="item in tenantOptions" :key="item.id" :label="item.name" :value="item.id" />
+          </ElSelect>
+        </ElFormItem>
         <ElFormItem label="签订日期"><ElDatePicker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></ElFormItem>
         <ElFormItem label="合同类型"><ElSelect v-model="query.type" clearable placeholder="请选择" class="filter-select"><ElOption v-for="item in CONTRACT_TYPES" :key="item" :label="item" :value="item" /></ElSelect></ElFormItem>
         <ElFormItem label="合同状态"><ElSelect v-model="query.status" clearable placeholder="请选择" class="filter-select"><ElOption v-for="item in CONTRACT_STATUS" :key="item" :label="item" :value="item" /></ElSelect></ElFormItem>
@@ -41,6 +47,8 @@
   import { computed, onMounted, reactive, ref } from 'vue'
   import { Search } from '@element-plus/icons-vue'
   import { CONTRACT_STATUS, CONTRACT_TYPES, getAnalysisOverview } from '@/api/contract'
+  import { getTenantPage, type TenantItem } from '@/api/tenant'
+  import { useUserStore } from '@/store/modules/user'
 
   defineOptions({ name: 'ContractAnalysis' })
 
@@ -62,7 +70,21 @@
 
   const data = ref<AnalysisData>()
   const dateRange = ref<string[]>([])
-  const query = reactive({ type: '', status: '' })
+  const query = reactive({ type: '', status: '', tenantId: undefined as number | undefined })
+
+  const userStore = useUserStore()
+  const isSuperAdmin = computed(() => userStore.info?.username === 'admin')
+  const tenantOptions = ref<TenantItem[]>([])
+
+  async function loadTenantOptions() {
+    if (!isSuperAdmin.value) return
+    try {
+      const { data: res } = await getTenantPage({ status: 1, pageSize: 100 })
+      tenantOptions.value = res.list
+    } catch {
+      // 错误消息由 http 拦截器统一弹出
+    }
+  }
 
   const metrics = computed(() => {
     const m = data.value?.metrics
@@ -112,15 +134,18 @@
 
   function reset() {
     dateRange.value = []
-    Object.assign(query, { type: '', status: '' })
+    Object.assign(query, { type: '', status: '', tenantId: undefined })
     loadData()
   }
+
+  onMounted(() => {
+    loadTenantOptions()
+    loadData()
+  })
 
   function amountText(value: string | number) {
     return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
-
-  onMounted(loadData)
 </script>
 
 <style scoped lang="scss">

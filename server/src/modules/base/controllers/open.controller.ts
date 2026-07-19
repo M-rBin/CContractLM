@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags, ApiOkResponse } from '@nestjs/swagger';
 import { Public } from '@/common/decorators';
 import { Admin } from '@/common/decorators';
@@ -6,6 +6,7 @@ import { ApiResult, ApiArrayResult, ApiOkVoid } from '@/common/decorators';
 import { BaseController } from '@/common/crud';
 import { AuthService } from '../services/auth.service';
 import { MenuService } from '../services/menu.service';
+import { PrismaService } from '@/common/prisma.service';
 import { LoginDto, RefreshTokenDto } from '../dto/login.dto';
 import { LoginResultVo, RefreshResultVo, HealthVo, UserVo } from '../vo/base.vo';
 
@@ -20,6 +21,7 @@ export class OpenController extends BaseController {
   constructor(
     private readonly authService: AuthService,
     private readonly menuService: MenuService,
+    private readonly prisma: PrismaService,
   ) {
     super();
   }
@@ -38,15 +40,28 @@ export class OpenController extends BaseController {
 
   /**
    * 登录
-   * 校验用户名与密码，成功后签发访问 token 与刷新 token，无需鉴权。
+   * 校验用户名、密码与公司归属，成功后签发含 tenantId 的访问 token，无需鉴权。
    */
   @Public()
   @Post('login')
   @ApiOperation({ summary: '登录' })
   @ApiResult(LoginResultVo)
   async login(@Body() dto: LoginDto) {
-    const result = await this.authService.login(dto.username, dto.password);
+    const result = await this.authService.login(dto.username, dto.password, dto.tenantId);
     return this.ok(result);
+  }
+
+  /**
+   * 获取用户可登录的公司列表
+   * 用户名失焦时调用，返回该账号关联且状态为启用的公司列表，无需鉴权。
+   */
+  @Public()
+  @Get('tenant-list')
+  @ApiOperation({ summary: '获取用户可登录公司列表' })
+  async tenantList(@Query('username') username: string) {
+    if (!username) return this.ok([]);
+    const list = await this.authService.getTenantList(username);
+    return this.ok(list);
   }
 
   /**
@@ -128,5 +143,24 @@ export class OpenController extends BaseController {
     const isSuperAdmin = admin.username === 'admin';
     const menuTree = await this.menuService.getUserMenuTree(roleIds, isSuperAdmin);
     return this.ok(menuTree);
+  }
+
+  /**
+   * 获取用户下拉列表
+   * 返回同公司内所有启用用户的 id/name/username，用于合同等业务模块的人员选择器。
+   * 无需权限点，仅需登录态。
+   */
+  @Get('users')
+  @ApiOperation({ summary: '获取用户下拉列表（业务选择器用）' })
+  async users(@Admin() admin: any) {
+    // superAdmin（tenantId=0）不限租户；普通用户只查本公司
+    const tenantFilter = admin.tenantId ? { tenantId: admin.tenantId } : {};
+    const list = await this.prisma.sysUser.findMany({
+      where: { status: 1, username: { not: 'admin' }, ...tenantFilter },
+      select: { id: true, username: true, name: true, nickName: true },
+      orderBy: { id: 'asc' },
+      take: 500,
+    });
+    return this.ok(list);
   }
 }

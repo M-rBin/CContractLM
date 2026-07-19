@@ -12,6 +12,17 @@ export function fetchLogin(params: Api.Auth.LoginParams) {
 }
 
 /**
+ * 获取用户可登录的公司列表
+ */
+export function fetchTenantList(username: string) {
+  return request.get<Api.Auth.TenantItem[]>({
+    url: '/admin/open/tenant-list',
+    params: { username },
+    skipAuthHandler: true
+  })
+}
+
+/**
  * 获取当前用户信息
  */
 export function fetchGetUserInfo() {
@@ -61,5 +72,18 @@ export function fetchPerms() {
 export function fetchGetMenuList() {
   return request.get<AppRouteRecord[]>({
     url: '/admin/open/permmenu'
+  })
+}
+
+export interface SimpleUser {
+  id: number
+  username: string
+  name: string | null
+  nickName: string | null
+}
+
+export function fetchUserOptions() {
+  return request.get<SimpleUser[]>({
+    url: '/admin/open/users'
   })
 }

@@ -226,7 +226,7 @@
     type ContractItem,
     type ContractQuery
   } from '@/api/contract'
-  import { userApi, type AdminUser } from '@/api/user'
+  import { fetchUserOptions, type SimpleUser } from '@/api/auth'
   import { useAiImportStore } from '@/store/modules/ai-import'
 
   defineOptions({ name: 'ContractLedger' })
@@ -235,7 +235,7 @@
   const aiImportStore = useAiImportStore()
   const loading = ref(false)
   const tableData = ref<ContractItem[]>([])
-  const userOptions = ref<AdminUser[]>([])
+  const userOptions = ref<SimpleUser[]>([])
   const expireRange = ref<string[]>([])
   const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
   const query = reactive<ContractQuery>({ keyword: '', type: '', status: '' })
@@ -530,8 +530,8 @@
   }
 
   async function loadUsers() {
-    const { data } = await userApi.getList({ pageSize: 100 })
-    userOptions.value = data?.list || []
+    const { data } = await fetchUserOptions()
+    userOptions.value = data || []
   }
 
   onMounted(() => {

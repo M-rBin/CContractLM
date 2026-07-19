@@ -14,8 +14,9 @@ export class ContractReminderController extends BaseController {
   @Get('list')
   @Perms('list')
   @ApiOperation({ summary: '分页查询履约提醒' })
-  async list(@Query() query: PageOptions & Record<string, any>) {
-    return this.ok(await this.aggregateService.pageReminders(query));
+  async list(@Query() query: PageOptions & Record<string, any>, @Admin() admin: any) {
+    const tenantId = admin?.username === 'admin' ? undefined : (admin?.tenantId || undefined);
+    return this.ok(await this.aggregateService.pageReminders(query, tenantId));
   }
 
   @Get('source/:id')

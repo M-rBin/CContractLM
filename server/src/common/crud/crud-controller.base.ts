@@ -7,8 +7,10 @@ import {
   Post,
   Put,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiParam, ApiOkResponse } from '@nestjs/swagger';
+import { Request } from 'express';
 import { BaseController } from './base.controller';
 import { BaseService, PageOptions } from './base.service';
 import { CrudOptions, getCrudOptions } from './crud.decorator';
@@ -45,9 +47,11 @@ export class CrudControllerBase extends BaseController {
   @ApiQuery({ name: 'order', required: false, description: '排序字段，默认 id' })
   @ApiQuery({ name: 'sort', required: false, enum: ['asc', 'desc'], description: '排序方向，默认 desc' })
   @ApiOkResponse({ type: PageResultDto, description: '分页结果（list + pagination）' })
-  async list(@Query() query: PageOptions & Record<string, any>) {
+  async list(@Query() query: PageOptions & Record<string, any>, @Req() req: Request & { admin?: any }) {
     const opts = this.crudOptions.pageQueryOp || {};
-    const where = this.buildWhere(query, opts);
+    const tenantId: number | undefined =
+      req.admin?.username === 'admin' ? undefined : (req.admin?.tenantId || undefined);
+    const where = this.buildWhere(query, opts, tenantId);
     // sort 做枚举校验，非法值丢弃，避免传入 Prisma 触发 500
     const sort = query.sort === 'asc' || query.sort === 'desc' ? query.sort : undefined;
     const options: PageOptions = {
@@ -136,8 +140,14 @@ export class CrudControllerBase extends BaseController {
   private buildWhere(
     query: Record<string, any>,
     opts: NonNullable<CrudOptions['pageQueryOp']>,
+    tenantId?: number,
   ): Record<string, any> {
     const where: Record<string, any> = {};
+
+    // 租户隔离：非 superAdmin 且模型有 tenantId 字段时自动过滤
+    if (tenantId !== undefined && tenantId !== 0) {
+      where.tenantId = tenantId;
+    }
 
     // 关键字命中任一模糊字段即可（OR 连接）
     if (opts.keyWordLikeFields?.length && query.keyword) {
@@ -151,7 +161,6 @@ export class CrudControllerBase extends BaseController {
       for (const field of opts.fieldEq) {
         const val = query[field];
         if (val !== undefined && val !== null && val !== '' && typeof val !== 'object') {
-          // query 参数恒为字符串，纯整数字符串需转回数字，否则 Int 字段会触发 Prisma 校验错误
           where[field] =
             typeof val === 'string' && /^-?\d+$/.test(val) ? Number(val) : val;
         }

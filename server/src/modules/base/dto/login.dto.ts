@@ -1,9 +1,9 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * 登录接口入参
- * 用于后台用户名/密码登录。
+ * 用于后台用户名/密码/公司登录。
  */
 export class LoginDto {
   @ApiProperty({ description: '用户名' })
@@ -17,6 +17,11 @@ export class LoginDto {
   @IsNotEmpty({ message: '密码不能为空' })
   @MaxLength(128)
   password: string;
+
+  @ApiPropertyOptional({ description: '公司 ID（多租户时必传）' })
+  @IsNumber()
+  @IsOptional()
+  tenantId?: number;
 }
 
 /**
