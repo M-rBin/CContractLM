@@ -11,13 +11,13 @@
             @keyup.enter="handleSearch"
           />
         </ElFormItem>
-        <ElFormItem label="操作人ID">
-          <ElInputNumber
-            v-model="filterForm.userId"
-            :min="1"
-            :controls="false"
-            placeholder="输入操作人ID"
-            class="filter-number"
+        <ElFormItem label="操作人">
+          <ElInput
+            v-model="filterForm.username"
+            placeholder="输入操作人姓名"
+            clearable
+            class="filter-input"
+            @keyup.enter="handleSearch"
           />
         </ElFormItem>
         <ElFormItem>
@@ -45,9 +45,14 @@
           empty-text="暂无操作日志数据"
         >
           <ElTableColumn prop="id" label="日志ID" width="90" align="center" />
-          <ElTableColumn prop="userId" label="操作人ID" width="110" align="center">
+          <ElTableColumn prop="username" label="操作人" width="120">
             <template #default="{ row }">
-              {{ row.userId || '-' }}
+              {{ row.username || '-' }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="description" label="操作说明" width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.description || '-' }}
             </template>
           </ElTableColumn>
           <ElTableColumn prop="action" label="操作动作" min-width="220" show-overflow-tooltip>
@@ -87,7 +92,8 @@
     <ElDrawer v-model="drawerVisible" title="日志详情" size="520px">
       <ElDescriptions v-if="currentLog" :column="1" border>
         <ElDescriptionsItem label="日志ID">{{ currentLog.id }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="操作人ID">{{ currentLog.userId || '-' }}</ElDescriptionsItem>
+        <ElDescriptionsItem label="操作人">{{ currentLog.username || '-' }}</ElDescriptionsItem>
+        <ElDescriptionsItem label="操作说明">{{ currentLog.description || '-' }}</ElDescriptionsItem>
         <ElDescriptionsItem label="操作动作">{{ currentLog.action || '-' }}</ElDescriptionsItem>
         <ElDescriptionsItem label="请求IP">{{ currentLog.ip || '-' }}</ElDescriptionsItem>
         <ElDescriptionsItem label="归属地">{{ currentLog.ipAddr || '-' }}</ElDescriptionsItem>
@@ -111,7 +117,7 @@
 
   const filterForm = reactive({
     keyword: '',
-    userId: undefined as number | undefined
+    username: ''
   })
   const loading = ref(false)
   const tableData = ref<OperLogItem[]>([])
@@ -124,7 +130,7 @@
     try {
       const { data } = await getOperLogList({
         keyword: filterForm.keyword || undefined,
-        userId: filterForm.userId,
+        username: filterForm.username || undefined,
         page: pagination.page,
         pageSize: pagination.pageSize,
         order: 'createTime',
@@ -146,7 +152,7 @@
 
   function handleReset() {
     filterForm.keyword = ''
-    filterForm.userId = undefined
+    filterForm.username = ''
     pagination.page = 1
     loadList()
   }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma.service';
-import { BaseService } from '@/common/crud';
+import { BaseService, PageOptions, PageResult } from '@/common/crud';
 
 /**
  * 系统操作日志服务
@@ -14,15 +14,53 @@ export class LogService extends BaseService {
 
   /**
    * 记录一条用户操作日志
-   * @param userId 操作人用户 ID
-   * @param action 操作描述（如接口路径或动作名）
-   * @param ip 操作来源 IP
-   * @param params 操作相关参数快照（可选）
    */
-  async record(userId: number, action: string, ip: string, params?: string) {
+  async record(userId: number, action: string, ip: string, params?: string, description?: string) {
     await this.prisma.sysLog.create({
-      data: { userId, action, ip, params },
+      data: { userId, action, ip, params, description },
     });
+  }
+
+  /** 分页查询，支持按操作人姓名过滤并自动拼接操作人名称 */
+  async page(options: PageOptions, where?: any, select?: any, include?: any): Promise<PageResult<any>> {
+    // buildWhere 的数字转换逻辑可能把纯数字用户名从 string 转为 number，
+    // 此处强制转回 string，防止 Prisma contains 查询收到 number 类型报错
+    const usernameFilter: string | undefined =
+      where?.username != null ? String(where.username) : undefined;
+    let finalWhere = where;
+    if (usernameFilter) {
+      const { username: _, ...restWhere } = where;
+      const matchedUsers = await this.prisma.sysUser.findMany({
+        where: { OR: [{ name: { contains: usernameFilter } }, { username: { contains: usernameFilter } }] },
+        select: { id: true },
+      });
+      finalWhere = { ...restWhere, userId: { in: matchedUsers.map((u) => u.id) } };
+    }
+
+    const result = await super.page(options, finalWhere, select, include);
+
+    const userIds = [...new Set(
+      result.list.map((item: any) => item.userId).filter((id: any) => id != null),
+    )] as number[];
+
+    let usernameMap: Record<number, string> = {};
+    if (userIds.length > 0) {
+      const users = await this.prisma.sysUser.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true, username: true },
+      });
+      usernameMap = Object.fromEntries(
+        users.map((u) => [u.id, u.name || u.username]),
+      );
+    }
+
+    return {
+      ...result,
+      list: result.list.map((item: any) => ({
+        ...item,
+        username: item.userId != null ? (usernameMap[item.userId] ?? null) : null,
+      })),
+    };
   }
 
   /** 清空全部操作日志 */

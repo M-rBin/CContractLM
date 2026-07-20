@@ -226,8 +226,14 @@ export class LogVo {
   @ApiProperty({ description: '操作用户 ID', nullable: true })
   userId: number | null;
 
+  @ApiProperty({ description: '操作人名称', nullable: true })
+  username: string | null;
+
   @ApiProperty({ description: '操作动作', nullable: true })
   action: string | null;
+
+  @ApiProperty({ description: '操作说明', nullable: true })
+  description: string | null;
 
   @ApiProperty({ description: '请求 IP', nullable: true })
   ip: string | null;

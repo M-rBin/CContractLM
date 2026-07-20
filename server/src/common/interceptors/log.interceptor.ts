@@ -33,6 +33,27 @@ function maskSensitiveFields(obj: Record<string, any>): Record<string, any> {
   return result;
 }
 
+const OPERATION_MAP: Record<string, string> = {
+  add: '新增', create: '新增',
+  update: '修改', edit: '修改',
+  delete: '删除', remove: '删除',
+  'batch-delete': '批量删除',
+  'update-status': '修改状态',
+  clear: '清空',
+  upload: '上传',
+  export: '导出',
+  import: '导入',
+};
+
+function deriveDescription(method: string, url: string): string {
+  // 过滤纯数字路径段（动态 ID），避免生成如 "42 update-status" 的无意义描述
+  const segments = url.split('/').filter((s) => s && !/^\d+$/.test(s));
+  const last = segments[segments.length - 1] ?? '';
+  const operation = OPERATION_MAP[last] ?? (method === 'DELETE' ? '删除' : last);
+  const module = segments.length >= 2 ? segments[segments.length - 2] : '';
+  return module ? `${operation} ${module}` : operation;
+}
+
 /**
  * 操作日志拦截器
  *
@@ -83,7 +104,8 @@ export class LogInterceptor implements NestInterceptor {
       }
     }
 
-    await this.logService.record(userId, action, ip, params);
+    const description = deriveDescription(request.method, url);
+    await this.logService.record(userId, action, ip, params, description);
   }
 
   private resolveIp(request: any): string {

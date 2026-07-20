@@ -220,6 +220,7 @@
     addContractPayment,
     deleteContract,
     exportContracts,
+    generateContractCode,
     getContractList,
     updateContract,
     uploadContractAttachment,
@@ -321,12 +322,18 @@
     loadList()
   }
 
-  function handleAdd() {
+  async function handleAdd() {
     dialogVisible.value = true
+    try {
+      const { data } = await generateContractCode()
+      form.code = data || ''
+    } catch {
+      // 生成失败不阻塞弹窗，用户可手动填写
+    }
   }
 
   /** 读取 AI 智能录入带入的识别结果并预填新增表单 */
-  function applyAiRecognizedData() {
+  async function applyAiRecognizedData() {
     const state = window.history.state
     const data = state?.aiRecognizedData
     if (!data?.contract) return
@@ -363,6 +370,13 @@
     dialogVisible.value = true
     // 清除 state，避免刷新或返回时重复预填
     window.history.replaceState({ ...state, aiRecognizedData: undefined }, '')
+    // 生成合同编号默认值（AI 流程也自动填入，用户可修改）
+    try {
+      const { data: generatedCode } = await generateContractCode()
+      if (generatedCode) form.code = generatedCode
+    } catch {
+      // 生成失败不阻塞弹窗
+    }
   }
 
   function handleEdit(row: any) {
@@ -424,10 +438,24 @@
         await updateContract({ id: form.id, ...payload })
         ElMessage.success('保存成功')
       } else {
-        const { data: newContract } = await addContract(payload)
+        let newContract
+        try {
+          const res = await addContract(payload, false)
+          newContract = res.data
+        } catch (e: any) {
+          // 编号重复时自动重拉新编号并提示用户修改后重试
+          if (e?.message?.includes('已存在')) {
+            const { data: freshCode } = await generateContractCode()
+            if (freshCode) form.code = freshCode
+            ElMessage.warning('合同编号已被占用，已为您生成新编号，请确认后重新提交')
+            return
+          }
+          ElMessage.error(e?.message || '新增失败')
+          return
+        }
         const contractId = newContract.id
 
-    // 保存收付款计划（有 direction、金额 > 0、日期已填的行）
+        // 保存收付款计划（有 direction、金额 > 0、日期已填的行）
         const validPlans = paymentPlans.value.filter(
           (p) => p.direction && p.planAmount > 0 && p.planDate
         )

@@ -86,6 +86,15 @@ export class ContractController extends CrudControllerFactory(ContractVo) {
     return `\uFEFF${[header, ...body].map((line) => line.map(csvCell).join(',')).join('\n')}`;
   }
 
+  @Get('generate-code')
+  @Perms('add')
+  @ApiOperation({ summary: '生成下一个可用合同编号' })
+  @ApiResult(String)
+  async generateCode(@Admin() admin?: any) {
+    const code = await this.contractService.generateNextCode();
+    return this.ok(code);
+  }
+
   @Delete('delete/:id')
   @Perms('delete')
   @ApiOperation({ summary: '删除合同并级联清理从属数据' })

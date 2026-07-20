@@ -3,7 +3,9 @@ import request from '@/utils/http'
 export interface OperLogItem {
   id: number
   userId: number | null
+  username: string | null
   action: string | null
+  description: string | null
   ip: string | null
   ipAddr: string | null
   params: string | null
@@ -25,7 +27,7 @@ export interface OperLogPageResult {
  */
 export function getOperLogList(params?: {
   keyword?: string
-  userId?: number
+  username?: string
   page?: number
   pageSize?: number
   order?: string

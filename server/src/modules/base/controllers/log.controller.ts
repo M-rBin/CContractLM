@@ -9,7 +9,7 @@ import { LogVo } from '../vo/base.vo';
 /**
  * 系统日志控制器
  * 提供操作日志的分页查询与清空接口，用于审计与行为追溯。
- * 仅开放分页（page）查询，支持按动作（action）模糊检索，并可按操作人（userId）精确过滤。
+ * 仅开放分页（page）查询，支持按动作（action）模糊检索，并可按操作人姓名（username）模糊过滤。
  */
 @ApiTags('系统日志')
 @CrudController({
@@ -17,7 +17,7 @@ import { LogVo } from '../vo/base.vo';
   api: ['page'],
   pageQueryOp: {
     keyWordLikeFields: ['action'],
-    fieldEq: ['userId'],
+    fieldEq: ['username'],
   },
 })
 export class LogController extends CrudControllerFactory(LogVo) {

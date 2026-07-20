@@ -214,6 +214,8 @@ model SysLog {
   ipAddr     String?
   /// 请求参数
   params     String?  @db.Text
+  /// 操作说明（人可读描述）
+  description String?  @db.VarChar(200)
   /// 租户 ID
   tenantId   Int?
   /// 创建时间

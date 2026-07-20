@@ -137,10 +137,11 @@ export function getContractList(params: ContractQuery) {
   })
 }
 
-export function addContract(data: ContractPayload) {
+export function addContract(data: ContractPayload, showErrorMessage = true) {
   return request.post<ContractItem>({
     url: '/admin/contract/info/add',
-    data
+    data,
+    showErrorMessage
   })
 }
 
@@ -155,6 +156,11 @@ export function deleteContract(id: number) {
   return request.del({
     url: `/admin/contract/info/delete/${id}`
   })
+}
+
+/** 生成当天下一个可用合同编号，格式：N + YYYYMMDD + 3位序号 */
+export function generateContractCode() {
+  return request.get<string>({ url: '/admin/contract/info/generate-code' })
 }
 
 export function exportContracts(params: ContractQuery) {

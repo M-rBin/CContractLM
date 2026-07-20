@@ -94,6 +94,33 @@ export class ContractService extends BaseService {
     });
   }
 
+  /**
+   * 生成当天下一个可用合同编号，格式：N + YYYYMMDD + 3位序号
+   */
+  async generateNextCode(): Promise<string> {
+    // en-CA locale 稳定输出 YYYY-MM-DD，replace 后得到 YYYYMMDD
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date()).replace(/-/g, '');
+    const prefix = `N${dateStr}`;
+
+    // code 字段全局唯一，扫描全库当天编号以确保生成结果不冲突
+    const records = await this.prisma.contractInfo.findMany({
+      where: { code: { startsWith: prefix } },
+      select: { code: true },
+    });
+
+    const maxSeq = records.reduce((max, r) => {
+      const seq = parseInt(r.code.slice(prefix.length), 10);
+      return isNaN(seq) ? max : Math.max(max, seq);
+    }, 0);
+
+    return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+  }
+
   async deleteContractCascade(id: number) {
     await this.prisma.$transaction(async (tx) => {
       await tx.contractAttachment.deleteMany({ where: { contractId: id } });
