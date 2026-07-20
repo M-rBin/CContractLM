@@ -9,8 +9,10 @@ import { SeedService } from '../src/common/seed.service';
 async function main() {
   const prisma = new PrismaClient();
   try {
-    // SeedService 仅依赖 PrismaService（结构与 PrismaClient 兼容），手动构造注入
-    const seedService = new SeedService(prisma as any);
+    // seed 脚本无 NestJS 容器，用轻量 stub 满足 RedisService 接口
+    // seedRoleMenus 中的缓存清除在此场景为 no-op，服务重启后缓存会自然重建
+    const redisStub = { del: async () => 0, get: async () => null, set: async () => 'OK' } as any;
+    const seedService = new SeedService(prisma as any, redisStub);
     await seedService.run();
   } finally {
     await prisma.$disconnect();

@@ -6,8 +6,10 @@ import { CommonModule } from './common/common.module';
 import { discoverModules } from './common/module-loader';
 import { AllExceptionsFilter } from './common/filters/all-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { LogInterceptor } from './common/interceptors/log.interceptor';
 import { AuthGuard } from './common/guards/auth.guard';
-import { PermsGuard } from './common/guards/perms.guard';
+import { PermsGuard, AUTH_PERMS_SERVICE } from './common/guards/perms.guard';
+import { AuthService } from './modules/base/services/auth.service';
 
 /**
  * 应用根模块
@@ -30,8 +32,10 @@ import { PermsGuard } from './common/guards/perms.guard';
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: LogInterceptor },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermsGuard },
+    { provide: AUTH_PERMS_SERVICE, useExisting: AuthService },
   ],
 })
 export class AppModule {}

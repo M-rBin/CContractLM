@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from './prisma.service';
+import { RedisService } from './redis.service';
 import { buildContractDemoSeed } from './contract-demo-seed';
 
 /**
@@ -16,7 +17,10 @@ import { buildContractDemoSeed } from './contract-demo-seed';
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   /** 执行种子数据初始化（超级管理员 + 默认角色 + 系统菜单 + 业务字典） */
   async run(): Promise<void> {
@@ -60,6 +64,7 @@ export class SeedService {
     await this.seedPositions();
     await this.seedRoles();
     await this.seedUsers(password);
+    await this.seedRoleMenus();
     await this.syncContractDictionaries();
     await this.syncContractDemoData();
 
@@ -518,6 +523,52 @@ export class SeedService {
       parentId: null,
       updateExisting: true,
     });
+
+    // 以下为隐藏的子模块菜单（isShow=0），仅供 PermsSyncService 发现按钮权限的父节点
+    // 对应 controller 路由：admin/contract/payment / attachment / milestone / oper-record
+    await this.ensureMenu({
+      name: '收付款计划',
+      type: 1,
+      router: '/contract/payment-plan',
+      perms: 'contract:payment:list',
+      isShow: 0,
+      orderNum: 99,
+      parentId: null,
+      updateExisting: true,
+    });
+
+    await this.ensureMenu({
+      name: '合同附件',
+      type: 1,
+      router: '/contract/attachment',
+      perms: 'contract:attachment:list',
+      isShow: 0,
+      orderNum: 99,
+      parentId: null,
+      updateExisting: true,
+    });
+
+    await this.ensureMenu({
+      name: '履约节点',
+      type: 1,
+      router: '/contract/milestone',
+      perms: 'contract:milestone:list',
+      isShow: 0,
+      orderNum: 99,
+      parentId: null,
+      updateExisting: true,
+    });
+
+    await this.ensureMenu({
+      name: '操作记录',
+      type: 1,
+      router: '/contract/oper-record',
+      perms: 'contract:oper-record:list',
+      isShow: 0,
+      orderNum: 99,
+      parentId: null,
+      updateExisting: true,
+    });
   }
 
   /** 初始化系统菜单（type: 0=目录 1=菜单 2=权限按钮）；已存在则只补系统配置菜单 */
@@ -821,5 +872,121 @@ export class SeedService {
     }
 
     this.logger.log('示例用户已初始化');
+  }
+
+  /**
+   * 为业务角色补齐默认菜单权限；对每个角色单独检查，已有权限则跳过。
+   * 解决 contract_admin / legal / finance 角色权限为空导致的「无权限」问题。
+   */
+  private async seedRoleMenus(): Promise<void> {
+    // 获取所有菜单（通过 perms 字段匹配，避免硬编码 ID）
+    const allMenus = await this.prisma.sysMenu.findMany({
+      select: { id: true, perms: true },
+    });
+    const menuByPerms = new Map(allMenus.filter((m) => m.perms).map((m) => [m.perms!, m.id]));
+
+    // contract_admin：合同全功能（含收付款计划、附件、里程碑的操作权限）
+    const contractAdminPerms = [
+      'contract:workbench:overview', 'contract:workbench:todos', 'contract:workbench:recent',
+      'contract:info:list', 'contract:info:add', 'contract:info:update', 'contract:info:delete',
+      'contract:info:detail', 'contract:info:export', 'contract:info:update-status', 'contract:info:batch-delete',
+      'contract:detail:detail',
+      'contract:reminder:list', 'contract:reminder:source', 'contract:reminder:handle',
+      'contract:payment:manage:list', 'contract:payment:manage:register',
+      'contract:payment:manage:stat', 'contract:payment:manage:export',
+      'contract:payment:list', 'contract:payment:add', 'contract:payment:update',
+      'contract:payment:register', 'contract:payment:delete',
+      'contract:attachment:list', 'contract:attachment:upload',
+      'contract:attachment:download', 'contract:attachment:delete',
+      'contract:milestone:list', 'contract:milestone:add', 'contract:milestone:update',
+      'contract:milestone:complete', 'contract:milestone:delete',
+      'contract:oper-record:list',
+      'contract:analysis:overview',
+      'contract:ai:recognize',
+    ];
+
+    // legal：合同只读 + 合规审核
+    const legalPerms = [
+      'contract:workbench:overview', 'contract:workbench:recent',
+      'contract:info:list', 'contract:info:detail', 'contract:info:export',
+      'contract:detail:detail',
+      'contract:reminder:list',
+      'contract:analysis:overview',
+    ];
+
+    // finance：台账只读 + 收付款管理
+    const financePerms = [
+      'contract:info:list', 'contract:info:detail', 'contract:info:export',
+      'contract:payment:manage:list', 'contract:payment:manage:register',
+      'contract:payment:manage:stat', 'contract:payment:manage:export',
+    ];
+
+    // dept_manager：合同管理 + 子模块操作（收付款、附件、里程碑等）
+    const deptManagerPerms = [
+      'contract:workbench:overview', 'contract:workbench:todos', 'contract:workbench:recent',
+      'contract:info:list', 'contract:info:add', 'contract:info:update', 'contract:info:delete',
+      'contract:info:detail', 'contract:info:export', 'contract:info:update-status', 'contract:info:batch-delete',
+      'contract:detail:detail',
+      'contract:reminder:list', 'contract:reminder:source', 'contract:reminder:handle',
+      'contract:payment:manage:list', 'contract:payment:manage:register',
+      'contract:payment:manage:stat', 'contract:payment:manage:export',
+      'contract:payment:list', 'contract:payment:add', 'contract:payment:update',
+      'contract:payment:register', 'contract:payment:delete',
+      'contract:attachment:list', 'contract:attachment:upload',
+      'contract:attachment:download', 'contract:attachment:delete',
+      'contract:milestone:list', 'contract:milestone:add', 'contract:milestone:update',
+      'contract:milestone:complete', 'contract:milestone:delete',
+      'contract:oper-record:list',
+      'contract:analysis:overview',
+      'contract:ai:recognize',
+    ];
+
+    // employee：合同只读，可查看台账、详情、工作台
+    const employeePerms = [
+      'contract:workbench:overview', 'contract:workbench:recent',
+      'contract:info:list', 'contract:info:detail', 'contract:info:export',
+      'contract:detail:detail',
+      'contract:reminder:list',
+      'contract:oper-record:list',
+    ];
+
+    const rolePermMap: Record<string, string[]> = {
+      contract_admin: contractAdminPerms,
+      legal: legalPerms,
+      finance: financePerms,
+      dept_manager: deptManagerPerms,
+      employee: employeePerms,
+    };
+
+    for (const [roleLabel, perms] of Object.entries(rolePermMap)) {
+      const role = await this.prisma.sysRole.findFirst({ where: { label: roleLabel } });
+      if (!role) continue;
+
+      const existingMenuIds = new Set(
+        (await this.prisma.sysRoleMenu.findMany({ where: { roleId: role.id }, select: { menuId: true } }))
+          .map((r) => r.menuId),
+      );
+
+      const menuIds = perms
+        .map((p) => menuByPerms.get(p))
+        .filter((id): id is number => id !== undefined && !existingMenuIds.has(id));
+
+      if (!menuIds.length) continue;
+
+      await this.prisma.sysRoleMenu.createMany({
+        skipDuplicates: true,
+        data: menuIds.map((menuId) => ({ roleId: role.id, menuId })),
+      });
+
+      // 清除该角色下所有用户的权限缓存，确保下次请求时重建
+      const userRoles = await this.prisma.sysUserRole.findMany({ where: { roleId: role.id } });
+      try {
+        await Promise.all(userRoles.map((ur) => this.redis.del(`admin:perms:${ur.userId}`)));
+      } catch (err) {
+        this.logger.warn(`清除角色 [${roleLabel}] 权限缓存失败，将在下次请求时自动重建`, err);
+      }
+
+      this.logger.log(`角色 [${roleLabel}] 已分配 ${menuIds.length} 个菜单权限`);
+    }
   }
 }

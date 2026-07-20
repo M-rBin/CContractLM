@@ -52,7 +52,11 @@ wait_mysql() {
     log "等待 MySQL 就绪..."
     for i in $(seq 1 30); do
         if docker exec "$MYSQL_CONTAINER" mysqladmin ping -uroot -p"$MYSQL_PWD" --silent &>/dev/null; then
-            log "MySQL 已就绪" "SUCCESS"; return 0
+            # 再从宿主机验证 TCP 端口可达，避免容器内 socket 就绪但端口映射未建立的竞态
+            # 用 bash 内建 /dev/tcp，无需 nc，无阻塞风险
+            if bash -c 'echo >/dev/tcp/127.0.0.1/3307' 2>/dev/null; then
+                log "MySQL 已就绪" "SUCCESS"; return 0
+            fi
         fi
         sleep 2
     done
