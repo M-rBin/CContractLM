@@ -259,7 +259,7 @@
     expireDate: '',
     ownerId: undefined as number | undefined,
     ownerName: '',
-    status: '草稿',
+    status: '履行中',
     remark: ''
   })
 
@@ -350,7 +350,7 @@
       signDate: c.signDate || '',
       effectiveDate: c.effectiveDate || '',
       expireDate: c.expireDate || '',
-      status: '草稿',
+      status: '履行中',
       remark: c.remark || ''
     })
     // 预填收付款计划（与提交过滤条件保持一致：direction、金额、日期均需有效）
@@ -525,7 +525,7 @@
       expireDate: '',
       ownerId: undefined,
       ownerName: '',
-      status: '草稿',
+      status: '履行中',
       remark: ''
     })
     paymentPlans.value = []
